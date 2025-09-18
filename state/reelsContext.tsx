@@ -1,6 +1,7 @@
 
-import React, { createContext, useContext, useMemo, useState } from 'react';
+import React, { createContext, useContext, useEffect, useMemo, useState } from 'react';
 import { ImageSourcePropType } from 'react-native';
+import { supabase } from '../lib/supabase';
 
 export type DanceCategory =
   | 'Challenges'
@@ -18,6 +19,16 @@ export interface User {
   id: string;
   username: string;
   avatar?: ImageSourcePropType | string;
+  bio?: string | null;
+}
+
+export interface Comment {
+  id: string;
+  reelId: string;
+  userId: string;
+  username: string;
+  text: string;
+  createdAt: number;
 }
 
 export interface Reel {
@@ -56,8 +67,8 @@ export interface AppSettings {
 interface ReelsContextType {
   user: User | null;
   setUser: (u: User | null) => void;
-  updateProfile: (patch: Partial<Pick<User, 'username' | 'avatar'>>) => void;
-  signOut: () => void;
+  updateProfile: (patch: Partial<Pick<User, 'username' | 'avatar' | 'bio'>>) => void;
+  signOut: () => Promise<void>;
   categories: DanceCategory[];
   reels: Reel[];
   addReel: (r: Omit<Reel, 'id' | 'likes' | 'createdAt'>) => void;
@@ -65,6 +76,11 @@ interface ReelsContextType {
   toggleSave: (id: string) => void;
   settings: AppSettings;
   updateSettings: (patch: Partial<AppSettings>) => void;
+  // Likes & comments (local)
+  liked: string[]; // reel ids liked by current user
+  toggleLike: (reelId: string) => void;
+  comments: Record<string, Comment[]>;
+  addComment: (reelId: string, text: string) => void;
 }
 
 const ReelsContext = createContext<ReelsContextType | undefined>(undefined);
@@ -131,6 +147,8 @@ export const ReelsProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   const [user, setUser] = useState<User | null>(null);
   const [reels, setReels] = useState<Reel[]>(sampleReels);
   const [saved, setSaved] = useState<string[]>([]);
+  const [liked, setLiked] = useState<string[]>([]);
+  const [comments, setComments] = useState<Record<string, Comment[]>>({});
   const [settings, setSettings] = useState<AppSettings>({
     friendAddPolicy: 'Everyone',
     profileVisibility: 'Public',
@@ -142,6 +160,63 @@ export const ReelsProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     language: 'English',
     safeMode: true,
   });
+
+  // Session persistence: load user from Supabase session and keep in sync
+  useEffect(() => {
+    let mounted = true;
+    const loadSession = async () => {
+      const { data } = await supabase.auth.getSession();
+      const sUser = data.session?.user;
+      if (sUser && mounted) {
+        await ensureProfileFromSupabase(sUser.id);
+      }
+    };
+    loadSession();
+    const { data: sub } = supabase.auth.onAuthStateChange(async (_event, session) => {
+      const sUser = session?.user;
+      if (sUser) {
+        await ensureProfileFromSupabase(sUser.id);
+      } else {
+        setUser(null);
+      }
+    });
+    return () => {
+      mounted = false;
+      sub.subscription.unsubscribe();
+    };
+  }, []);
+
+  const ensureProfileFromSupabase = async (uid: string) => {
+    try {
+      const { data: profile, error } = await supabase
+        .from('profiles')
+        .select('username, avatar_url, bio')
+        .eq('user_id', uid)
+        .maybeSingle();
+
+      if (error) {
+        console.log('ensureProfileFromSupabase error', error);
+      }
+
+      let username = profile?.username;
+      if (!username) {
+        // fallback from auth user email prefix
+        const { data: u } = await supabase.auth.getUser();
+        const email = u.user?.email || 'user';
+        username = (email.split('@')[0] || 'user').toLowerCase();
+      }
+
+      setUser({
+        id: uid,
+        username: username || `user${String(Date.now()).slice(-4)}`,
+        avatar: profile?.avatar_url || undefined,
+        bio: profile?.bio ?? null,
+      });
+      console.log('Loaded user from session:', username);
+    } catch (e) {
+      console.log('ensureProfileFromSupabase exception', e);
+    }
+  };
 
   const addReel: ReelsContextType['addReel'] = (r) => {
     const id = `local_${Date.now()}`;
@@ -156,11 +231,40 @@ export const ReelsProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     setSaved((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
   };
 
+  const toggleLike: ReelsContextType['toggleLike'] = (reelId) => {
+    setLiked((prev) => {
+      const isLiked = prev.includes(reelId);
+      setReels((old) =>
+        old.map((r) => (r.id === reelId ? { ...r, likes: Math.max(0, r.likes + (isLiked ? -1 : 1)) } : r))
+      );
+      return isLiked ? prev.filter((id) => id !== reelId) : [...prev, reelId];
+    });
+  };
+
+  const addComment: ReelsContextType['addComment'] = (reelId, text) => {
+    if (!user || !text.trim()) {
+      console.log('Cannot add comment: no user or empty text');
+      return;
+    }
+    const c: Comment = {
+      id: `c_${Date.now()}`,
+      reelId,
+      userId: user.id,
+      username: user.username,
+      text: text.trim(),
+      createdAt: Date.now(),
+    };
+    setComments((prev) => {
+      const list = prev[reelId] || [];
+      return { ...prev, [reelId]: [c, ...list] };
+    });
+  };
+
   const updateProfile: ReelsContextType['updateProfile'] = (patch) => {
     setUser((prev) => {
       if (!prev) return prev;
       const updated = { ...prev, ...patch };
-      console.log('Updating profile', updated);
+      console.log('Updating profile (local)', updated);
       return updated;
     });
   };
@@ -169,8 +273,9 @@ export const ReelsProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     setSettings((prev) => ({ ...prev, ...patch }));
   };
 
-  const signOut = () => {
+  const signOut: ReelsContextType['signOut'] = async () => {
     console.log('Signing out');
+    await supabase.auth.signOut();
     setUser(null);
   };
 
@@ -187,8 +292,12 @@ export const ReelsProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       toggleSave,
       settings,
       updateSettings,
+      liked,
+      toggleLike,
+      comments,
+      addComment,
     }),
-    [user, reels, saved, settings]
+    [user, reels, saved, settings, liked, comments]
   );
 
   return <ReelsContext.Provider value={value}>{children}</ReelsContext.Provider>;

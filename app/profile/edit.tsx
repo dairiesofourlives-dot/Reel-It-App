@@ -1,11 +1,12 @@
 
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { View, Text, StyleSheet, TextInput, Image, Alert, Pressable } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
 import { colors, commonStyles } from '../../styles/commonStyles';
 import { useReels } from '../../state/reelsContext';
 import Button from '../../components/Button';
 import { useRouter } from 'expo-router';
+import { supabase } from '../../lib/supabase';
 
 export default function EditProfileScreen() {
   const { user, updateProfile } = useReels();
@@ -13,6 +14,30 @@ export default function EditProfileScreen() {
 
   const [username, setUsername] = useState(user?.username || '');
   const [avatar, setAvatar] = useState<string | undefined>(typeof user?.avatar === 'string' ? user?.avatar : undefined);
+  const [bio, setBio] = useState(user?.bio ?? '');
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    // Load fresh bio in case it wasn't in context
+    const load = async () => {
+      if (!user) return;
+      const { data, error } = await supabase
+        .from('profiles')
+        .select('username, avatar_url, bio')
+        .eq('user_id', user.id)
+        .maybeSingle();
+      if (error) {
+        console.log('load profile error', error);
+        return;
+      }
+      if (data) {
+        setUsername(data.username || username);
+        setAvatar(data.avatar_url || undefined);
+        setBio(data.bio || '');
+      }
+    };
+    load();
+  }, [user]);
 
   const pickAvatar = async () => {
     try {
@@ -36,14 +61,44 @@ export default function EditProfileScreen() {
     }
   };
 
-  const save = () => {
+  const save = async () => {
+    if (!user) {
+      Alert.alert('Not signed in', 'Please sign in to edit your profile.');
+      return;
+    }
     if (!username.trim()) {
       Alert.alert('Username required', 'Please enter a username.');
       return;
     }
-    updateProfile({ username: username.trim(), avatar });
-    Alert.alert('Saved', 'Profile updated.');
-    router.back();
+    if (bio.length > 350) {
+      Alert.alert('Bio too long', 'Bio must be 350 characters or less.');
+      return;
+    }
+    try {
+      setSaving(true);
+      const { error } = await supabase
+        .from('profiles')
+        .update({
+          username: username.trim(),
+          bio: bio.trim(),
+          // avatar upload omitted here; in a real app you would upload to storage and save URL
+          // avatar_url: avatar
+        })
+        .eq('user_id', user.id);
+      if (error) {
+        Alert.alert('Save failed', error.message);
+        setSaving(false);
+        return;
+      }
+      updateProfile({ username: username.trim(), bio: bio.trim(), avatar });
+      Alert.alert('Saved', 'Profile updated.');
+      router.back();
+    } catch (e: any) {
+      console.log('save error', e);
+      Alert.alert('Error', e?.message || 'Something went wrong');
+    } finally {
+      setSaving(false);
+    }
   };
 
   return (
@@ -75,8 +130,22 @@ export default function EditProfileScreen() {
           placeholderTextColor={colors.grey}
           style={styles.input}
           autoCapitalize="none"
+          maxLength={20}
         />
-        <Button text="Save" onPress={save} />
+
+        <Text style={styles.label}>Bio</Text>
+        <TextInput
+          value={bio}
+          onChangeText={setBio}
+          placeholder="Tell us about your dance style…"
+          placeholderTextColor={colors.grey}
+          style={[styles.input, { height: 110, textAlignVertical: 'top' }]}
+          multiline
+          maxLength={350}
+        />
+        <Text style={styles.counter}>{bio.length}/350</Text>
+
+        <Button text={saving ? 'Saving…' : 'Save'} onPress={save} />
       </View>
     </View>
   );
@@ -163,5 +232,11 @@ const styles = StyleSheet.create({
     color: colors.text,
     boxShadow: '0 2px 6px rgba(0,0,0,0.06)',
     elevation: 1,
+  },
+  counter: {
+    alignSelf: 'flex-end',
+    color: colors.grey,
+    marginTop: -4,
+    marginBottom: 6,
   },
 });

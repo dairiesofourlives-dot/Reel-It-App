@@ -1,18 +1,21 @@
 
-import React from 'react';
+import React, { useState } from 'react';
 import { View, Text, Image, StyleSheet, Pressable } from 'react-native';
 import { Reel, useReels } from '../state/reelsContext';
 import { colors } from '../styles/commonStyles';
 import { Ionicons } from '@expo/vector-icons';
 import { Video } from 'expo-av';
+import CommentsModal from './CommentsModal';
 
 interface ReelCardProps {
   reel: Reel;
 }
 
 export default function ReelCard({ reel }: ReelCardProps) {
-  const { saved, toggleSave } = useReels();
+  const { saved, toggleSave, liked, toggleLike } = useReels();
   const isSaved = saved.includes(reel.id);
+  const isLiked = liked.includes(reel.id);
+  const [commentsOpen, setCommentsOpen] = useState(false);
 
   const isVideo =
     /\.mp4|\.mov|^http.*\.(mp4|mov)/i.test(reel.mediaUri) ||
@@ -39,7 +42,6 @@ export default function ReelCard({ reel }: ReelCardProps) {
         </View>
       )}
 
-      {/* Filter overlay simulation */}
       {reel.filter === 'mono' && <View style={[styles.filterOverlay, { backgroundColor: 'rgba(0,0,0,0.35)' }]} />}
       {reel.filter === 'warm' && <View style={[styles.filterOverlay, { backgroundColor: 'rgba(255,165,0,0.15)' }]} />}
       {reel.filter === 'cool' && <View style={[styles.filterOverlay, { backgroundColor: 'rgba(0,128,255,0.15)' }]} />}
@@ -51,15 +53,30 @@ export default function ReelCard({ reel }: ReelCardProps) {
             <Text style={styles.categoryText}>{reel.category}</Text>
           </View>
         </View>
+
         <View style={styles.bottomRow}>
           <Ionicons name="musical-notes" size={16} color={colors.background} />
           <Text style={styles.sound} numberOfLines={1}>
             {reel.soundName}
           </Text>
-          <View style={styles.likes}>
-            <Ionicons name="heart" size={16} color={colors.background} />
+
+          <Pressable
+            onPress={() => toggleLike(reel.id)}
+            hitSlop={10}
+            style={({ pressed }) => [styles.actionBtn, pressed && { opacity: 0.8 }]}
+          >
+            <Ionicons name={isLiked ? 'heart' : 'heart-outline'} size={20} color={isLiked ? '#ff4d6d' : '#fff'} />
             <Text style={styles.likeText}>{reel.likes}</Text>
-          </View>
+          </Pressable>
+
+          <Pressable
+            onPress={() => setCommentsOpen(true)}
+            hitSlop={10}
+            style={({ pressed }) => [styles.actionBtn, pressed && { opacity: 0.8 }]}
+          >
+            <Ionicons name="chatbubble-ellipses-outline" size={20} color="#fff" />
+          </Pressable>
+
           <Pressable
             onPress={() => toggleSave(reel.id)}
             hitSlop={12}
@@ -69,6 +86,8 @@ export default function ReelCard({ reel }: ReelCardProps) {
           </Pressable>
         </View>
       </View>
+
+      <CommentsModal reelId={reel.id} visible={commentsOpen} onClose={() => setCommentsOpen(false)} />
     </View>
   );
 }
@@ -148,15 +167,18 @@ const styles = StyleSheet.create({
     flex: 1,
     marginLeft: 6,
   },
-  likes: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    marginLeft: 10,
-  },
   likeText: {
     color: '#fff',
     fontWeight: '700',
+    marginLeft: 4,
+  },
+  actionBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 2,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 8,
   },
   saveBtn: {
     padding: 4,

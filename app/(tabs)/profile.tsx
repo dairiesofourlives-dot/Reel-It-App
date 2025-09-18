@@ -1,5 +1,5 @@
 
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { View, Text, StyleSheet, Image, Pressable, Alert, Switch, Linking, ScrollView } from 'react-native';
 import { colors, commonStyles } from '../../styles/commonStyles';
 import Button from '../../components/Button';
@@ -8,6 +8,7 @@ import SimpleBottomSheet from '../../components/BottomSheet';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import * as WebBrowser from 'expo-web-browser';
+import { supabase } from '../../lib/supabase';
 
 export default function ProfileScreen() {
   const { user, reels, saved, signOut, settings, updateSettings } = useReels();
@@ -18,7 +19,36 @@ export default function ProfileScreen() {
   >('root');
   const [activeTab, setActiveTab] = useState<'reels' | 'saved'>('reels');
 
+  const [followers, setFollowers] = useState<number>(0);
+  const [following, setFollowing] = useState<number>(0);
+
   console.log('ProfileScreen render user:', user?.username);
+
+  useEffect(() => {
+    let mounted = true;
+    const loadCounts = async () => {
+      try {
+        if (!user) return;
+        const { count: followersCount, error: followersErr } = await supabase
+          .from('follows')
+          .select('*', { head: true, count: 'exact' })
+          .eq('followee_id', user.id);
+        if (!followersErr && mounted) setFollowers(followersCount || 0);
+
+        const { count: followingCount, error: followingErr } = await supabase
+          .from('follows')
+          .select('*', { head: true, count: 'exact' })
+          .eq('follower_id', user.id);
+        if (!followingErr && mounted) setFollowing(followingCount || 0);
+      } catch (e) {
+        console.log('loadCounts error', e);
+      }
+    };
+    loadCounts();
+    return () => {
+      mounted = false;
+    };
+  }, [user]);
 
   const openSettings = () => {
     setActiveSheet('root');
@@ -37,8 +67,8 @@ export default function ProfileScreen() {
   const savedReels = useMemo(() => reels.filter((r) => saved.includes(r.id)), [reels, saved]);
 
   const stats = {
-    following: 0,
-    followers: 0,
+    following,
+    followers,
     posts: myReels.length,
   };
 
@@ -59,10 +89,11 @@ export default function ProfileScreen() {
             icon="log-out"
             label="Log out"
             danger
-            onPress={() => {
-              signOut();
+            onPress={async () => {
+              await signOut();
               Alert.alert('Logged out', 'You have been signed out.');
               closeSettings();
+              router.replace('/auth');
             }}
           />
         )}
@@ -75,7 +106,7 @@ export default function ProfileScreen() {
       <SheetHeader title="Manage Account" onBack={() => setActiveSheet('root')} />
       <Section title="Manage Account">
         <Text style={styles.description}>
-          Update your display name or profile picture from Profile → Edit Profile.
+          Update your display name, bio or profile picture from Profile → Edit Profile.
         </Text>
       </Section>
       <Section title="Security">
@@ -97,10 +128,11 @@ export default function ProfileScreen() {
               {
                 text: 'Delete',
                 style: 'destructive',
-                onPress: () => {
-                  signOut();
+                onPress: async () => {
+                  await signOut();
                   Alert.alert('Account deleted', 'Your account has been removed from this device.');
                   closeSettings();
+                  router.replace('/auth');
                 },
               },
             ]);
@@ -220,7 +252,7 @@ export default function ProfileScreen() {
   const SupportSheet = () => (
     <>
       <SheetHeader title="Contact Support" onBack={() => setActiveSheet('root')} />
-      <Section title="If you need extra help, our support team is ready:">
+    <Section title="If you need extra help, our support team is ready:">
         <LinkRow label="Email" value="info@se-mo.com" onPress={() => Linking.openURL('mailto:info@se-mo.com')} />
         <LinkRow label="Website" value="www.se-mo.com/help" onPress={() => WebBrowser.openBrowserAsync('https://www.se-mo.com/help')} />
         <Text style={styles.description}>In-App: Profile → Help & Support → Contact Us to send a direct message.</Text>
@@ -248,6 +280,20 @@ export default function ProfileScreen() {
         <Button text="Email us directly" onPress={() => Linking.openURL('mailto:info@se-mo.com?subject=Bug%20Report')} />
         <Text style={[styles.description, { marginTop: 8 }]}>Tip: Check the FAQ first — most common issues are answered there.</Text>
       </Section>
+      {user && (
+        <Section title="Logout">
+          <Button
+            text="Log out"
+            onPress={async () => {
+              await signOut();
+              Alert.alert('Logged out', 'You have been signed out.');
+              closeSettings();
+              router.replace('/auth');
+            }}
+            style={{ backgroundColor: '#ff3b30' }}
+          />
+        </Section>
+      )}
     </>
   );
 
@@ -322,19 +368,20 @@ Our mission: Stream. Connect. Dance.</Text>
                   <Text style={styles.avatarInitials}>{user.username.slice(0, 2).toUpperCase()}</Text>
                 </View>
               )}
-              <View style={{ marginLeft: 14 }}>
+              <View style={{ marginLeft: 14, flex: 1 }}>
                 <Text style={styles.username}>@{user.username}</Text>
+                {!!user.bio && <Text style={styles.bio} numberOfLines={3}>{user.bio}</Text>}
                 <Text style={styles.meta}>Tap the settings icon to manage account</Text>
               </View>
             </View>
 
             {/* Stats Row (clickable) */}
             <View style={styles.statsRow}>
-              <Pressable onPress={() => Alert.alert('Following', 'No following yet.')} style={styles.stat}>
+              <Pressable onPress={() => router.push('/follows/following')} style={styles.stat}>
                 <Text style={styles.statValue}>{stats.following}</Text>
                 <Text style={styles.statLabel}>Following</Text>
               </Pressable>
-              <Pressable onPress={() => Alert.alert('Followers', 'No followers yet.')} style={styles.stat}>
+              <Pressable onPress={() => router.push('/follows/followers')} style={styles.stat}>
                 <Text style={styles.statValue}>{stats.followers}</Text>
                 <Text style={styles.statLabel}>Followers</Text>
               </Pressable>
@@ -573,6 +620,10 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontWeight: '900',
     color: colors.text,
+  },
+  bio: {
+    color: colors.text,
+    marginTop: 4,
   },
   meta: {
     color: colors.grey,
