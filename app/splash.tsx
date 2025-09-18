@@ -62,9 +62,8 @@ export default function SplashScreen() {
           },
         ]}
       >
-        <Text style={styles.logoTop}>Reel</Text>
         <View style={styles.row}>
-          <Text style={styles.logoBottom}>&apos;It</Text>
+          <Text style={styles.logoCombined}>Reel'It</Text>
           <View style={styles.dot} />
         </View>
       </Animated.View>
@@ -89,6 +88,12 @@ const styles = StyleSheet.create({
     marginBottom: 8,
   },
   logoTop: {
+    fontSize: 52,
+    fontWeight: '900',
+    color: colors.primary,
+    letterSpacing: 0.5,
+  },
+  logoCombined: {
     fontSize: 52,
     fontWeight: '900',
     color: colors.primary,

@@ -6,6 +6,7 @@ import { colors, commonStyles } from '../styles/commonStyles';
 import Button from '../components/Button';
 import { useReels } from '../state/reelsContext';
 import { supabase } from '../lib/supabase';
+import { Ionicons } from '@expo/vector-icons';
 
 function sanitizeUsername(u: string) {
   return u.trim().toLowerCase().replace(/[^a-z0-9._]/g, '');
@@ -22,6 +23,8 @@ export default function AuthScreen() {
   const [password, setPassword] = useState('');
   const [repeatPassword, setRepeatPassword] = useState('');
   const [loading, setLoading] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
+  const [showRepeat, setShowRepeat] = useState(false);
 
   useEffect(() => {
     console.log('AuthScreen mounted', { mode });
@@ -36,9 +39,8 @@ export default function AuthScreen() {
   };
 
   const ensureProfile = async (sUser: any) => {
-    // Fetch existing profile or create one with metadata
     try {
-      const { data: existing, error: selErr } = await supabase
+      const { data: existing } = await supabase
         .from('profiles')
         .select('id, username, avatar_url, full_name')
         .eq('user_id', sUser.id)
@@ -53,14 +55,17 @@ export default function AuthScreen() {
         baseUsername = baseUsername.slice(0, 20) || `user${String(Date.now()).slice(-4)}`;
         let attempt = baseUsername;
 
-        // Try insert; if unique conflict, try a few alternatives
         for (let i = 0; i < 3; i++) {
-          const { data: ins, error: insErr } = await supabase.from('profiles').insert({
-            user_id: sUser.id,
-            username: attempt,
-            full_name: sUser.user_metadata?.full_name || '',
-            avatar_url: null,
-          }).select('id, username, full_name').single();
+          const { data: ins, error: insErr } = await supabase
+            .from('profiles')
+            .insert({
+              user_id: sUser.id,
+              username: attempt,
+              full_name: sUser.user_metadata?.full_name || '',
+              avatar_url: null,
+            })
+            .select('id, username, full_name')
+            .single();
 
           if (!insErr && ins) {
             finalUsername = ins.username;
@@ -77,13 +82,11 @@ export default function AuthScreen() {
           }
         }
       } else {
-        // Update profile with metadata if missing
         const metaUsername = sanitizeUsername(sUser.user_metadata?.username || '');
         const metaFullName = (sUser.user_metadata?.full_name || '').trim();
         const needsUpdate = (!!metaUsername && metaUsername !== existing.username) || (!!metaFullName && metaFullName !== existing.full_name);
         if (needsUpdate) {
           let newUsername = metaUsername || existing.username;
-          // attempt update; on duplicate, append number
           for (let i = 0; i < 2; i++) {
             const { data: upd, error: updErr } = await supabase
               .from('profiles')
@@ -116,7 +119,6 @@ export default function AuthScreen() {
 
       finalUsername = finalUsername || sanitizeUsername((sUser.email || 'user').split('@')[0]) || `user${String(Date.now()).slice(-4)}`;
 
-      // Update local state
       setUser({ id: sUser.id, username: finalUsername, avatar: undefined });
       console.log('Profile ensured with username:', finalUsername, 'name:', finalFullName);
     } catch (e) {
@@ -177,12 +179,13 @@ export default function AuthScreen() {
         if (error) {
           Alert.alert('Sign up failed', error.message);
         } else {
-          Alert.alert(
-            'Verify your email',
-            'We sent a verification link. Please verify your email to complete sign up.'
-          );
+          Alert.alert('Verify your email', 'We sent a verification link. Please verify your email to complete sign up.');
         }
       } else {
+        if (!email && !password) {
+          Alert.alert('Login error', 'Please enter your email and password.');
+          return;
+        }
         if (!email || !emailRegex.test(email)) {
           Alert.alert('Invalid email', 'Please provide a valid email address.');
           return;
@@ -190,10 +193,6 @@ export default function AuthScreen() {
         if (!password) {
           Alert.alert('Missing password', 'Please enter your password.');
           return;
-        }
-        if (!isStrongPassword(password)) {
-          // Allow sign-in even if not strong, but warn user for consistency we will not block here.
-          console.log('Password strength check skipped for sign-in.');
         }
 
         setLoading(true);
@@ -210,11 +209,9 @@ export default function AuthScreen() {
           return;
         }
 
-        // Ensure profile in DB and set local context
         await ensureProfile(sUser);
 
         Alert.alert('Success', 'Signed in successfully.');
-        // Navigate to Home (Feed tab)
         router.replace('/(tabs)/feed');
       }
     } catch (e: any) {
@@ -294,28 +291,46 @@ export default function AuthScreen() {
         />
 
         <Text style={styles.label}>Password</Text>
-        <TextInput
-          value={password}
-          onChangeText={setPassword}
-          placeholder="••••••••"
-          placeholderTextColor={colors.grey}
-          secureTextEntry
-          style={styles.input}
-          returnKeyType={mode === 'signin' ? 'done' : 'next'}
-        />
+        <View style={styles.inputWrap}>
+          <TextInput
+            value={password}
+            onChangeText={setPassword}
+            placeholder="••••••••"
+            placeholderTextColor={colors.grey}
+            secureTextEntry={!showPassword}
+            style={[styles.input, { paddingRight: 44 }]}
+            returnKeyType={mode === 'signin' ? 'done' : 'next'}
+          />
+          <Pressable
+            onPress={() => setShowPassword(!showPassword)}
+            style={({ pressed }) => [styles.eyeBtn, pressed && { opacity: 0.7 }]}
+            hitSlop={8}
+          >
+            <Ionicons name={showPassword ? 'eye-off' : 'eye'} size={20} color={colors.grey} />
+          </Pressable>
+        </View>
 
         {mode === 'signup' && (
           <>
             <Text style={styles.label}>Repeat Password</Text>
-            <TextInput
-              value={repeatPassword}
-              onChangeText={setRepeatPassword}
-              placeholder="••••••••"
-              placeholderTextColor={colors.grey}
-              secureTextEntry
-              style={styles.input}
-              returnKeyType="done"
-            />
+            <View style={styles.inputWrap}>
+              <TextInput
+                value={repeatPassword}
+                onChangeText={setRepeatPassword}
+                placeholder="••••••••"
+                placeholderTextColor={colors.grey}
+                secureTextEntry={!showRepeat}
+                style={[styles.input, { paddingRight: 44 }]}
+                returnKeyType="done"
+              />
+              <Pressable
+                onPress={() => setShowRepeat(!showRepeat)}
+                style={({ pressed }) => [styles.eyeBtn, pressed && { opacity: 0.7 }]}
+                hitSlop={8}
+              >
+                <Ionicons name={showRepeat ? 'eye-off' : 'eye'} size={20} color={colors.grey} />
+              </Pressable>
+            </View>
           </>
         )}
 
@@ -396,6 +411,10 @@ const styles = StyleSheet.create({
     color: colors.text,
     marginTop: 6,
   },
+  inputWrap: {
+    position: 'relative',
+    width: '100%',
+  },
   input: {
     width: '100%',
     borderWidth: 1,
@@ -407,6 +426,13 @@ const styles = StyleSheet.create({
     color: colors.text,
     boxShadow: '0 2px 6px rgba(0,0,0,0.06)',
     elevation: 1,
+  },
+  eyeBtn: {
+    position: 'absolute',
+    right: 10,
+    top: 0,
+    bottom: 0,
+    justifyContent: 'center',
   },
   hint: {
     color: colors.grey,

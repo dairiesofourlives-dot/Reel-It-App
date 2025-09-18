@@ -16,6 +16,7 @@ export default function ProfileScreen() {
   const [activeSheet, setActiveSheet] = useState<
     'root' | 'account' | 'privacy' | 'notifications' | 'content' | 'support' | 'community' | 'report' | 'about' | 'security'
   >('root');
+  const [activeTab, setActiveTab] = useState<'reels' | 'saved'>('reels');
 
   console.log('ProfileScreen render user:', user?.username);
 
@@ -73,12 +74,18 @@ export default function ProfileScreen() {
     <>
       <SheetHeader title="Manage Account" onBack={() => setActiveSheet('root')} />
       <Section title="Manage Account">
-        <Text style={styles.description}>Update Display Name or Profile Picture → Go to Profile → Edit Profile.</Text>
-        <Button text="Go to Edit Profile" onPress={() => { closeSettings(); handleEdit(); }} />
+        <Text style={styles.description}>
+          Update your display name or profile picture from Profile → Edit Profile.
+        </Text>
       </Section>
       <Section title="Security">
         <Text style={styles.description}>Change Email or Password → Profile → Settings → Account → Security.</Text>
-        <Button text="Open Security" onPress={() => setActiveSheet('security')} style={{ backgroundColor: colors.backgroundAlt }} textStyle={{ color: colors.text }} />
+        <Button
+          text="Open Security"
+          onPress={() => setActiveSheet('security')}
+          style={{ backgroundColor: colors.backgroundAlt }}
+          textStyle={{ color: colors.text }}
+        />
       </Section>
       <Section title="Delete Account">
         <Text style={styles.description}>Delete Account → Profile → Settings → Account → Delete Account.</Text>
@@ -91,7 +98,6 @@ export default function ProfileScreen() {
                 text: 'Delete',
                 style: 'destructive',
                 onPress: () => {
-                  // Simulated deletion in this demo
                   signOut();
                   Alert.alert('Account deleted', 'Your account has been removed from this device.');
                   closeSettings();
@@ -183,9 +189,7 @@ export default function ProfileScreen() {
     const toggleTag = (tag: string) => {
       const exists = settings.feedPreferences.includes(tag);
       updateSettings({
-        feedPreferences: exists
-          ? settings.feedPreferences.filter((t) => t !== tag)
-          : [...settings.feedPreferences, tag],
+        feedPreferences: exists ? settings.feedPreferences.filter((t) => t !== tag) : [...settings.feedPreferences, tag],
       });
     };
 
@@ -284,10 +288,30 @@ Our mission: Stream. Connect. Dance.</Text>
     }
   };
 
+  const GridTabs = () => (
+    <View style={styles.gridTabs}>
+      <Pressable onPress={() => setActiveTab('reels')} style={[styles.gridTabBtn, activeTab === 'reels' && styles.gridTabBtnActive]}>
+        <Ionicons name="grid-outline" size={18} color={activeTab === 'reels' ? '#fff' : colors.text} />
+        <Text style={[styles.gridTabTxt, activeTab === 'reels' && styles.gridTabTxtActive]}>Reels</Text>
+      </Pressable>
+      <Pressable onPress={() => setActiveTab('saved')} style={[styles.gridTabBtn, activeTab === 'saved' && styles.gridTabBtnActive]}>
+        <Ionicons name="bookmark-outline" size={18} color={activeTab === 'saved' ? '#fff' : colors.text} />
+        <Text style={[styles.gridTabTxt, activeTab === 'saved' && styles.gridTabTxtActive]}>Saved</Text>
+      </Pressable>
+    </View>
+  );
+
   return (
     <View style={[commonStyles.wrapper, styles.container]}>
       <ScrollView contentContainerStyle={{ paddingBottom: 80 }}>
-        <Text style={styles.title}>Your Profile</Text>
+        {/* Top bar with brand and settings icon */}
+        <View style={styles.topBar}>
+          <Text style={styles.brand}>Reel&apos;It</Text>
+          <Pressable onPress={openSettings} hitSlop={10} style={({ pressed }) => [styles.settingsBtn, pressed && { opacity: 0.7 }]}>
+            <Ionicons name="settings-sharp" size={22} color={colors.text} />
+          </Pressable>
+        </View>
+
         {user ? (
           <>
             <View style={styles.userRow}>
@@ -300,41 +324,42 @@ Our mission: Stream. Connect. Dance.</Text>
               )}
               <View style={{ marginLeft: 14 }}>
                 <Text style={styles.username}>@{user.username}</Text>
-                <Text style={styles.meta}>Tap settings to manage account</Text>
+                <Text style={styles.meta}>Tap the settings icon to manage account</Text>
               </View>
             </View>
 
-            {/* Stats Row */}
+            {/* Stats Row (clickable) */}
             <View style={styles.statsRow}>
-              <Stat label="Following" value={stats.following} />
-              <Stat label="Followers" value={stats.followers} />
-              <Stat label="Posts" value={stats.posts} />
+              <Pressable onPress={() => Alert.alert('Following', 'No following yet.')} style={styles.stat}>
+                <Text style={styles.statValue}>{stats.following}</Text>
+                <Text style={styles.statLabel}>Following</Text>
+              </Pressable>
+              <Pressable onPress={() => Alert.alert('Followers', 'No followers yet.')} style={styles.stat}>
+                <Text style={styles.statValue}>{stats.followers}</Text>
+                <Text style={styles.statLabel}>Followers</Text>
+              </Pressable>
+              <Pressable onPress={() => Alert.alert('Posts', `${stats.posts} posts`)} style={styles.stat}>
+                <Text style={styles.statValue}>{stats.posts}</Text>
+                <Text style={styles.statLabel}>Posts</Text>
+              </Pressable>
             </View>
 
             <View style={styles.actions}>
               <Button text="Edit Profile" onPress={handleEdit} />
-              <Button
-                text="Settings"
-                onPress={openSettings}
-                style={{ backgroundColor: colors.backgroundAlt }}
-                textStyle={{ color: colors.text }}
-              />
             </View>
 
-            {/* Uploaded Reels Grid */}
-            <Text style={styles.sectionHeader}>Your Reels</Text>
-            <View style={styles.grid}>
-              {myReels.length === 0 ? (
-                <Text style={styles.empty}>No reels yet. Upload your first reel!</Text>
-              ) : (
-                myReels.map((r) => <ReelGridItem key={r.id} thumb={r.thumb} />)
-              )}
-            </View>
+            {/* Instagram-like tabs */}
+            <GridTabs />
 
-            {/* Saved Reels Grid */}
-            <Text style={styles.sectionHeader}>Saved Reels</Text>
+            {/* Grid */}
             <View style={styles.grid}>
-              {savedReels.length === 0 ? (
+              {activeTab === 'reels' ? (
+                myReels.length === 0 ? (
+                  <Text style={styles.empty}>No reels yet. Upload your first reel!</Text>
+                ) : (
+                  myReels.map((r) => <ReelGridItem key={r.id} thumb={r.thumb} />)
+                )
+              ) : savedReels.length === 0 ? (
                 <Text style={styles.empty}>No saved reels yet.</Text>
               ) : (
                 savedReels.map((r) => <ReelGridItem key={r.id} thumb={r.thumb} />)
@@ -346,22 +371,16 @@ Our mission: Stream. Connect. Dance.</Text>
             <Text style={styles.subtitle}>You are not signed in.</Text>
             <View style={styles.actions}>
               <Button text="Sign In / Sign Up" onPress={() => router.push('/auth')} />
-              <Button
-                text="Settings"
-                onPress={openSettings}
-                style={{ backgroundColor: colors.backgroundAlt }}
-                textStyle={{ color: colors.text }}
-              />
             </View>
 
-            {/* Show empty grids for consistency */}
-            <Text style={styles.sectionHeader}>Your Reels</Text>
+            {/* Tabs even when signed-out to show structure */}
+            <GridTabs />
             <View style={styles.grid}>
-              <Text style={styles.empty}>Sign in to see your uploaded reels.</Text>
-            </View>
-            <Text style={styles.sectionHeader}>Saved Reels</Text>
-            <View style={styles.grid}>
-              <Text style={styles.empty}>Sign in to see saved reels.</Text>
+              {activeTab === 'reels' ? (
+                <Text style={styles.empty}>Sign in to see your uploaded reels.</Text>
+              ) : (
+                <Text style={styles.empty}>Sign in to see saved reels.</Text>
+              )}
             </View>
           </>
         )}
@@ -378,7 +397,10 @@ Our mission: Stream. Connect. Dance.</Text>
 
 function ReelGridItem({ thumb }: { thumb?: string }) {
   return (
-    <View style={gridStyles.item}>
+    <Pressable
+      onPress={() => Alert.alert('Reel', 'Opening reel...')}
+      style={({ pressed }) => [gridStyles.item, pressed && { opacity: 0.85 }]}
+    >
       {thumb ? (
         <Image source={{ uri: thumb }} style={gridStyles.media} />
       ) : (
@@ -387,7 +409,7 @@ function ReelGridItem({ thumb }: { thumb?: string }) {
           <Text style={gridStyles.placeholderText}>Reel</Text>
         </View>
       )}
-    </View>
+    </Pressable>
   );
 }
 
@@ -428,10 +450,7 @@ function SettingsItem({
   danger?: boolean;
 }) {
   return (
-    <Pressable
-      onPress={onPress}
-      style={({ pressed }) => [styles.itemRow, pressed && { opacity: 0.8 }]}
-    >
+    <Pressable onPress={onPress} style={({ pressed }) => [styles.itemRow, pressed && { opacity: 0.8 }]}>
       <View style={[styles.iconCircle, danger && { backgroundColor: 'rgba(255,59,48,0.1)' }]}>
         <Ionicons name={icon} size={22} color={danger ? '#ff3b30' : colors.text} />
       </View>
@@ -454,7 +473,11 @@ function OptionRow({ label, selected, onPress }: { label: string; selected: bool
   return (
     <Pressable onPress={onPress} style={({ pressed }) => [styles.optionRow, pressed && { opacity: 0.8 }]}>
       <Text style={[styles.optionLabel, selected && { color: colors.primary }]}>{label}</Text>
-      {selected ? <Ionicons name="checkmark-circle" size={22} color={colors.primary} /> : <Ionicons name="ellipse-outline" size={20} color={colors.grey} />}
+      {selected ? (
+        <Ionicons name="checkmark-circle" size={22} color={colors.primary} />
+      ) : (
+        <Ionicons name="ellipse-outline" size={20} color={colors.grey} />
+      )}
     </Pressable>
   );
 }
@@ -499,11 +522,21 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingTop: 18,
   },
-  title: {
-    fontSize: 22,
-    fontWeight: '800',
-    color: colors.text,
+  topBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
     marginBottom: 6,
+  },
+  brand: {
+    fontSize: 22,
+    fontWeight: '900',
+    color: colors.text,
+  },
+  settingsBtn: {
+    padding: 8,
+    borderRadius: 999,
+    backgroundColor: colors.backgroundAlt,
   },
   subtitle: {
     color: colors.grey,
@@ -573,12 +606,33 @@ const styles = StyleSheet.create({
   statLabel: {
     color: colors.grey,
   },
-  sectionHeader: {
-    fontSize: 16,
-    fontWeight: '800',
+  gridTabs: {
+    flexDirection: 'row',
+    gap: 8,
+    backgroundColor: colors.backgroundAlt,
+    borderRadius: 999,
+    padding: 4,
+    marginTop: 6,
+    marginBottom: 10,
+  },
+  gridTabBtn: {
+    flex: 1,
+    paddingVertical: 8,
+    borderRadius: 999,
+    alignItems: 'center',
+    flexDirection: 'row',
+    justifyContent: 'center',
+    gap: 6,
+  },
+  gridTabBtnActive: {
+    backgroundColor: colors.primary,
+  },
+  gridTabTxt: {
     color: colors.text,
-    marginTop: 14,
-    marginBottom: 8,
+    fontWeight: '800',
+  },
+  gridTabTxtActive: {
+    color: '#fff',
   },
   grid: {
     flexDirection: 'row',
