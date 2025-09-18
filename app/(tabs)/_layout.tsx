@@ -12,8 +12,8 @@ export default function TabsLayout() {
       screenOptions={{
         headerShown: false,
         tabBarShowLabel: false,
-        tabBarActiveTintColor: colors.primaryDark,
-        tabBarInactiveTintColor: colors.primaryLight,
+        tabBarActiveTintColor: colors.text,
+        tabBarInactiveTintColor: colors.text,
         tabBarStyle: {
           backgroundColor: colors.backgroundAlt,
           borderTopColor: 'transparent',
@@ -62,7 +62,7 @@ export default function TabsLayout() {
           title: 'Tutorials',
           tabBarIcon: ({ color, size }) => (
             <View style={styles.iconWrap}>
-              <Ionicons name="school" size={size} color={color} />
+              <Ionicons name="pricetags" size={size} color={color} />
             </View>
           ),
         }}

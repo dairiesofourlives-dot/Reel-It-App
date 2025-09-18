@@ -1,23 +1,45 @@
 
 import React from 'react';
-import { View, Text, StyleSheet, ScrollView } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, Pressable } from 'react-native';
 import { colors, commonStyles } from '../../styles/commonStyles';
 import { useReels } from '../../state/reelsContext';
+import { useRouter } from 'expo-router';
+
+function toHashtag(category: string) {
+  // Convert to #hashTag removing spaces and special chars
+  const cleaned = category.replace(/[^a-zA-Z0-9]/g, '');
+  return `#${cleaned}`;
+}
 
 export default function TutorialsScreen() {
   const { categories } = useReels();
+  const router = useRouter();
   console.log('TutorialsScreen categories:', categories.length);
+
+  const onPressHashtag = (tag: string) => {
+    console.log('Tapped hashtag', tag);
+    router.push({ pathname: '/(tabs)/search', params: { q: tag } });
+  };
 
   return (
     <View style={[commonStyles.wrapper, styles.container]}>
       <Text style={styles.title}>Dance Tutorials</Text>
       <ScrollView contentContainerStyle={styles.content}>
-        {categories.map((c) => (
-          <View key={c} style={styles.card}>
-            <Text style={styles.cardTitle}>{c}</Text>
-            <Text style={styles.cardText}>Explore {c} moves and challenges.</Text>
-          </View>
-        ))}
+        {categories.map((c) => {
+          const tag = toHashtag(c);
+          return (
+            <Pressable
+              key={c}
+              onPress={() => onPressHashtag(tag)}
+              style={({ pressed }) => [styles.card, pressed && { opacity: 0.9 }]}
+            >
+              <Text style={styles.cardTitle}>{tag}</Text>
+              <Text style={styles.cardText}>
+                Explore {c} moves and challenges. Tap to search tutorials and reels by {tag}.
+              </Text>
+            </Pressable>
+          );
+        })}
       </ScrollView>
     </View>
   );
@@ -50,7 +72,7 @@ const styles = StyleSheet.create({
   cardTitle: {
     fontSize: 16,
     fontWeight: '800',
-    color: colors.text,
+    color: colors.primary,
     marginBottom: 6,
   },
   cardText: {

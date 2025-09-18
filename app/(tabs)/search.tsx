@@ -1,13 +1,22 @@
 
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { View, TextInput, StyleSheet, Text, ScrollView } from 'react-native';
 import { useReels } from '../../state/reelsContext';
 import { colors, commonStyles } from '../../styles/commonStyles';
 import ReelCard from '../../components/ReelCard';
+import { useLocalSearchParams } from 'expo-router';
 
 export default function SearchScreen() {
   const { reels } = useReels();
-  const [query, setQuery] = useState('');
+  const params = useLocalSearchParams();
+  const initialQ = typeof params.q === 'string' ? params.q : '';
+  const [query, setQuery] = useState(initialQ);
+
+  useEffect(() => {
+    if (typeof params.q === 'string') {
+      setQuery(params.q);
+    }
+  }, [params.q]);
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -16,7 +25,8 @@ export default function SearchScreen() {
       r =>
         r.username.toLowerCase().includes(q) ||
         r.soundName.toLowerCase().includes(q) ||
-        r.category.toLowerCase().includes(q)
+        r.category.toLowerCase().includes(q) ||
+        (`#${r.category.replace(/[^a-zA-Z0-9]/g, '')}`.toLowerCase().includes(q))
     );
   }, [reels, query]);
 
@@ -28,7 +38,7 @@ export default function SearchScreen() {
       <TextInput
         value={query}
         onChangeText={setQuery}
-        placeholder="Search by user, sound or category"
+        placeholder="Search by user, sound or #Hashtag"
         placeholderTextColor={colors.grey}
         style={styles.input}
         autoCapitalize="none"

@@ -7,7 +7,7 @@ import Button from '../../components/Button';
 import { useReels } from '../../state/reelsContext';
 
 export default function UploadScreen() {
-  const { addReel } = useReels();
+  const { addReel, user } = useReels();
   const [picked, setPicked] = useState<string | null>(null);
 
   const pickMedia = async () => {
@@ -46,8 +46,8 @@ export default function UploadScreen() {
     }
     console.log('Posting reel with uri:', picked);
     addReel({
-      userId: 'local_user',
-      username: 'you',
+      userId: user?.id || 'guest',
+      username: user?.username || 'guest',
       mediaUri: picked,
       soundName: 'Imported Sound',
       category: 'Challenges',

@@ -35,6 +35,8 @@ export interface Reel {
 interface ReelsContextType {
   user: User | null;
   setUser: (u: User | null) => void;
+  updateProfile: (patch: Partial<Pick<User, 'username' | 'avatar'>>) => void;
+  signOut: () => void;
   categories: DanceCategory[];
   reels: Reel[];
   addReel: (r: Omit<Reel, 'id' | 'likes' | 'createdAt'>) => void;
@@ -113,10 +115,26 @@ export const ReelsProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     setReels((prev) => [newReel, ...prev]);
   };
 
+  const updateProfile: ReelsContextType['updateProfile'] = (patch) => {
+    setUser((prev) => {
+      if (!prev) return prev;
+      const updated = { ...prev, ...patch };
+      console.log('Updating profile', updated);
+      return updated;
+    });
+  };
+
+  const signOut = () => {
+    console.log('Signing out');
+    setUser(null);
+  };
+
   const value = useMemo(
     () => ({
       user,
       setUser,
+      updateProfile,
+      signOut,
       categories: defaultCategories,
       reels,
       addReel,
