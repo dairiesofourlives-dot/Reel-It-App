@@ -9,7 +9,6 @@ import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import * as WebBrowser from 'expo-web-browser';
 import { supabase } from '../../lib/supabase';
-import FastScrollerList from '../../components/FastScrollerList';
 
 export default function ProfileScreen() {
   const { user, reels, saved, signOut, settings, updateSettings } = useReels();
@@ -119,32 +118,21 @@ export default function ProfileScreen() {
           textStyle={{ color: colors.text }}
         />
       </Section>
-      <Section title="Fast Scroller (Apps)">
-        <Text style={styles.description}>Quickly jump through an alphabetized list of apps.</Text>
-        <FastScrollerList />
-      </Section>
-      <Section title="Delete Account">
-        <Text style={styles.description}>Delete Account → Profile → Settings → Account → Delete Account.</Text>
-        <Button
-          text="Delete Account"
-          onPress={() => {
-            Alert.alert('Delete Account', 'Are you sure you want to delete your account? This cannot be undone.', [
-              { text: 'Cancel', style: 'cancel' },
-              {
-                text: 'Delete',
-                style: 'destructive',
-                onPress: async () => {
-                  await signOut();
-                  Alert.alert('Account deleted', 'Your account has been removed from this device.');
-                  closeSettings();
-                  router.replace('/auth');
-                },
-              },
-            ]);
-          }}
-          style={{ backgroundColor: '#ff3b30' }}
-        />
-      </Section>
+      {user && (
+        <Section title="Logout">
+          <Text style={styles.description}>You can log out of your account from here.</Text>
+          <Button
+            text="Log out"
+            onPress={async () => {
+              await signOut();
+              Alert.alert('Logged out', 'You have been signed out.');
+              closeSettings();
+              router.replace('/auth');
+            }}
+            style={{ backgroundColor: '#ff3b30' }}
+          />
+        </Section>
+      )}
     </>
   );
 
@@ -191,10 +179,6 @@ export default function ProfileScreen() {
       </Section>
       <Section title="Block or Report Users">
         <Text style={styles.description}>Open a profile → Tap Options → Block or Report.</Text>
-      </Section>
-      <Section title="Fast Scroller (Apps)">
-        <Text style={styles.description}>Quickly jump through an alphabetized list of apps.</Text>
-        <FastScrollerList />
       </Section>
     </>
   );
@@ -833,6 +817,12 @@ const styles = StyleSheet.create({
   linkText: {
     color: colors.primary,
     fontWeight: '800',
+  },
+  empty: {
+    color: colors.grey,
+    paddingVertical: 16,
+    textAlign: 'center',
+    width: '100%',
   },
 });
 
