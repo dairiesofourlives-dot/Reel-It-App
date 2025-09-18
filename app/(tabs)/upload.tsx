@@ -1,21 +1,28 @@
 
 import React, { useMemo, useState } from 'react';
-import { View, Text, StyleSheet, Image, Alert, TextInput, Pressable } from 'react-native';
+import { View, Text, StyleSheet, Alert, TextInput, Pressable } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
 import { colors, commonStyles } from '../../styles/commonStyles';
 import Button from '../../components/Button';
 import { useReels } from '../../state/reelsContext';
 import { Audio, Video } from 'expo-av';
+import { useLocalSearchParams } from 'expo-router';
+import { Ionicons } from '@expo/vector-icons';
 
 export default function UploadScreen() {
   const { addReel, user } = useReels();
+  const params = useLocalSearchParams();
+  const preSong = typeof params.song === 'string' ? params.song : undefined;
+
   const [picked, setPicked] = useState<string | null>(null);
+  const [pickedDuration, setPickedDuration] = useState<number | null>(null); // seconds
   const [overlayText, setOverlayText] = useState('');
   const [filter, setFilter] = useState<'none' | 'mono' | 'warm' | 'cool'>('none');
   const [aspect, setAspect] = useState<'9:16' | '1:1' | '16:9'>('9:16');
 
+  const MAX_DURATION = 90; // seconds
+
   const aspectStyle = useMemo(() => {
-    // Simulate cropping by container aspect
     switch (aspect) {
       case '1:1':
         return { aspectRatio: 1 };
@@ -32,6 +39,17 @@ export default function UploadScreen() {
       return false;
     }
     return true;
+  };
+
+  const onPicked = (uri: string, duration?: number | null) => {
+    if (duration && duration > MAX_DURATION) {
+      Alert.alert('Video too long', 'Reels must be 1:30 or shorter. Please trim your video.');
+      setPicked(null);
+      setPickedDuration(null);
+      return;
+    }
+    setPicked(uri);
+    setPickedDuration(duration || null);
   };
 
   const pickFromLibrary = async () => {
@@ -52,9 +70,9 @@ export default function UploadScreen() {
       });
 
       if (!res.canceled) {
-        const uri = res.assets?.[0]?.uri;
-        if (uri) {
-          setPicked(uri);
+        const asset = res.assets?.[0];
+        if (asset?.uri) {
+          onPicked(asset.uri, (asset as any).duration ?? undefined);
         }
       }
     } catch (e) {
@@ -81,14 +99,14 @@ export default function UploadScreen() {
       console.log('Launching camera (video mode)');
       const res = await ImagePicker.launchCameraAsync({
         mediaTypes: ImagePicker.MediaTypeOptions.Videos,
-        videoMaxDuration: 60,
+        videoMaxDuration: MAX_DURATION,
         quality: ImagePicker.UIImagePickerControllerQualityType.High,
       });
 
       if (!res.canceled) {
-        const uri = res.assets?.[0]?.uri;
-        if (uri) {
-          setPicked(uri);
+        const asset = res.assets?.[0];
+        if (asset?.uri) {
+          onPicked(asset.uri, (asset as any).duration ?? undefined);
         }
       }
     } catch (e) {
@@ -98,7 +116,6 @@ export default function UploadScreen() {
   };
 
   const goLive = () => {
-    // Placeholder for live streaming
     Alert.alert('Go Live', 'Live video is coming soon. Stay tuned for dance battles and showcases!');
   };
 
@@ -109,12 +126,12 @@ export default function UploadScreen() {
     }
     if (!ensureLoggedIn()) return;
 
-    console.log('Posting reel with uri:', picked, { overlayText, filter, aspect });
+    console.log('Posting reel with uri:', picked, { overlayText, filter, aspect, pickedDuration });
     addReel({
       userId: user?.id || 'guest',
       username: user?.username || 'guest',
       mediaUri: picked,
-      soundName: 'Imported Sound',
+      soundName: preSong || 'Imported Sound',
       category: 'Challenges',
       thumb: picked,
       overlayText: overlayText.trim() || undefined,
@@ -123,6 +140,7 @@ export default function UploadScreen() {
     });
     Alert.alert('Uploaded', 'Your reel has been added to the feed.');
     setPicked(null);
+    setPickedDuration(null);
     setOverlayText('');
     setFilter('none');
     setAspect('9:16');
@@ -130,8 +148,11 @@ export default function UploadScreen() {
 
   return (
     <View style={[commonStyles.wrapper, styles.container]}>
-      <Text style={styles.title}>Upload Reel</Text>
-      <Text style={styles.subtitle}>Only video reels are allowed.</Text>
+      <View style={styles.topRow}>
+        <Text style={styles.title}>Upload</Text>
+        {preSong ? <Text style={styles.usingSong}>Using song: {preSong}</Text> : null}
+      </View>
+      <Text style={styles.subtitle}>Reels must be 1:30 or shorter.</Text>
 
       <View style={[styles.previewWrap, aspectStyle]}>
         {picked ? (
@@ -151,6 +172,22 @@ export default function UploadScreen() {
             <Text style={styles.previewText}>No video selected</Text>
           </View>
         )}
+
+        {/* Floating bubbles like IG */}
+        <View style={styles.fabRow}>
+          <Pressable onPress={pickFromLibrary} style={({ pressed }) => [styles.fab, pressed && { opacity: 0.9 }]}>
+            <Ionicons name="film" size={22} color="#fff" />
+            <Text style={styles.fabLabel}>Upload</Text>
+          </Pressable>
+          <Pressable onPress={goLive} style={({ pressed }) => [styles.fab, { backgroundColor: '#e91e63' }, pressed && { opacity: 0.9 }]}>
+            <Ionicons name="radio" size={22} color="#fff" />
+            <Text style={styles.fabLabel}>Go Live</Text>
+          </Pressable>
+          <Pressable onPress={recordVideo} style={({ pressed }) => [styles.fab, { backgroundColor: colors.primaryDark }, pressed && { opacity: 0.9 }]}>
+            <Ionicons name="camera" size={22} color="#fff" />
+            <Text style={styles.fabLabel}>Record</Text>
+          </Pressable>
+        </View>
       </View>
 
       <View style={styles.editCard}>
@@ -186,12 +223,7 @@ export default function UploadScreen() {
             </Pressable>
           ))}
         </View>
-      </View>
 
-      <View style={styles.buttons}>
-        <Button text="Choose from Library" onPress={pickFromLibrary} />
-        <Button text="Record Reel" onPress={recordVideo} style={{ backgroundColor: colors.primaryDark }} />
-        <Button text="Go Live (Beta)" onPress={goLive} style={{ backgroundColor: colors.accent }} />
         <Button text="Post Reel" onPress={postReel} style={{ backgroundColor: colors.primary }} />
       </View>
     </View>
@@ -203,11 +235,20 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingTop: 18,
   },
+  topRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
   title: {
     fontSize: 22,
     fontWeight: '800',
     color: colors.text,
     marginBottom: 6,
+  },
+  usingSong: {
+    color: colors.primary,
+    fontWeight: '800',
   },
   subtitle: {
     color: colors.grey,
@@ -223,6 +264,7 @@ const styles = StyleSheet.create({
     boxShadow: '0 4px 10px rgba(0,0,0,0.06)',
     elevation: 2,
     marginBottom: 12,
+    position: 'relative',
   },
   previewMedia: {
     width: '100%',
@@ -305,9 +347,26 @@ const styles = StyleSheet.create({
   chipTextActive: {
     color: '#fff',
   },
-  buttons: {
-    width: '100%',
-    gap: 10,
-    marginTop: 6,
+  fabRow: {
+    position: 'absolute',
+    bottom: 10,
+    left: 10,
+    right: 10,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+  },
+  fab: {
+    backgroundColor: colors.primary,
+    paddingVertical: 10,
+    paddingHorizontal: 14,
+    borderRadius: 999,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    boxShadow: '0 4px 10px rgba(0,0,0,0.15)',
+  },
+  fabLabel: {
+    color: '#fff',
+    fontWeight: '800',
   },
 });

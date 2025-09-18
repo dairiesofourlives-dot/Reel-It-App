@@ -208,6 +208,11 @@ export default function AuthScreen() {
           setLoading(false);
           return;
         }
+        if (!sUser.email_confirmed_at) {
+          Alert.alert('Verify email', 'Please verify your email before signing in. Check your inbox.');
+          setLoading(false);
+          return;
+        }
 
         await ensureProfile(sUser);
 

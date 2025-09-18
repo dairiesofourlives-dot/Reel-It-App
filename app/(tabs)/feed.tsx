@@ -13,7 +13,7 @@ export default function FeedScreen() {
   return (
     <View style={[commonStyles.wrapper, styles.wrapper]}>
       <ScrollView contentContainerStyle={styles.content}>
-        <Text style={styles.header}>Today&apos;s Reels</Text>
+        <Text style={styles.header}>Following</Text>
         {reels.map((reel) => (
           <ReelCard key={reel.id} reel={reel} />
         ))}

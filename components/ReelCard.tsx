@@ -6,6 +6,7 @@ import { colors } from '../styles/commonStyles';
 import { Ionicons } from '@expo/vector-icons';
 import { Video } from 'expo-av';
 import CommentsModal from './CommentsModal';
+import { useRouter } from 'expo-router';
 
 interface ReelCardProps {
   reel: Reel;
@@ -16,13 +17,14 @@ export default function ReelCard({ reel }: ReelCardProps) {
   const isSaved = saved.includes(reel.id);
   const isLiked = liked.includes(reel.id);
   const [commentsOpen, setCommentsOpen] = useState(false);
+  const router = useRouter();
 
   const isVideo =
     /\.mp4|\.mov|^http.*\.(mp4|mov)/i.test(reel.mediaUri) ||
     reel.mediaUri.includes('gtv-videos-bucket');
 
   return (
-    <View style={styles.card}>
+    <Pressable onPress={() => router.push(`/reel/${encodeURIComponent(reel.id)}`)} style={({ pressed }) => [styles.card, pressed && { opacity: 0.96 }]}> 
       {isVideo ? (
         <Video
           source={{ uri: reel.mediaUri }}
@@ -48,7 +50,9 @@ export default function ReelCard({ reel }: ReelCardProps) {
 
       <View style={styles.overlay}>
         <View style={styles.topRow}>
-          <Text style={styles.username}>@{reel.username}</Text>
+          <Pressable onPress={(e) => { e.stopPropagation(); router.push(`/user/${encodeURIComponent(reel.userId)}`); }}>
+            <Text style={styles.username}>@{reel.username}</Text>
+          </Pressable>
           <View style={styles.categoryPill}>
             <Text style={styles.categoryText}>{reel.category}</Text>
           </View>
@@ -61,7 +65,7 @@ export default function ReelCard({ reel }: ReelCardProps) {
           </Text>
 
           <Pressable
-            onPress={() => toggleLike(reel.id)}
+            onPress={(e) => { e.stopPropagation(); toggleLike(reel.id); }}
             hitSlop={10}
             style={({ pressed }) => [styles.actionBtn, pressed && { opacity: 0.8 }]}
           >
@@ -70,7 +74,7 @@ export default function ReelCard({ reel }: ReelCardProps) {
           </Pressable>
 
           <Pressable
-            onPress={() => setCommentsOpen(true)}
+            onPress={(e) => { e.stopPropagation(); setCommentsOpen(true); }}
             hitSlop={10}
             style={({ pressed }) => [styles.actionBtn, pressed && { opacity: 0.8 }]}
           >
@@ -78,7 +82,7 @@ export default function ReelCard({ reel }: ReelCardProps) {
           </Pressable>
 
           <Pressable
-            onPress={() => toggleSave(reel.id)}
+            onPress={(e) => { e.stopPropagation(); toggleSave(reel.id); }}
             hitSlop={12}
             style={({ pressed }) => [styles.saveBtn, pressed && { opacity: 0.8 }]}
           >
@@ -88,7 +92,7 @@ export default function ReelCard({ reel }: ReelCardProps) {
       </View>
 
       <CommentsModal reelId={reel.id} visible={commentsOpen} onClose={() => setCommentsOpen(false)} />
-    </View>
+    </Pressable>
   );
 }
 

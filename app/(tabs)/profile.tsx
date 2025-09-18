@@ -9,6 +9,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import * as WebBrowser from 'expo-web-browser';
 import { supabase } from '../../lib/supabase';
+import FastScrollerList from '../../components/FastScrollerList';
 
 export default function ProfileScreen() {
   const { user, reels, saved, signOut, settings, updateSettings } = useReels();
@@ -118,6 +119,10 @@ export default function ProfileScreen() {
           textStyle={{ color: colors.text }}
         />
       </Section>
+      <Section title="Fast Scroller (Apps)">
+        <Text style={styles.description}>Quickly jump through an alphabetized list of apps.</Text>
+        <FastScrollerList />
+      </Section>
       <Section title="Delete Account">
         <Text style={styles.description}>Delete Account → Profile → Settings → Account → Delete Account.</Text>
         <Button
@@ -186,6 +191,10 @@ export default function ProfileScreen() {
       </Section>
       <Section title="Block or Report Users">
         <Text style={styles.description}>Open a profile → Tap Options → Block or Report.</Text>
+      </Section>
+      <Section title="Fast Scroller (Apps)">
+        <Text style={styles.description}>Quickly jump through an alphabetized list of apps.</Text>
+        <FastScrollerList />
       </Section>
     </>
   );
