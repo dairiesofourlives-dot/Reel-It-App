@@ -1,3 +1,4 @@
+
 import React, { useEffect, useRef, useState } from 'react';
 import {
   View,
@@ -20,7 +21,6 @@ interface SimpleBottomSheetProps {
 
 const { height: SCREEN_HEIGHT } = Dimensions.get('window');
 
-// Snap positions for the bottom sheet
 const SNAP_POINTS = {
   HALF: SCREEN_HEIGHT * 0.5,
   FULL: SCREEN_HEIGHT * 0.8,
@@ -87,7 +87,6 @@ const SimpleBottomSheet: React.FC<SimpleBottomSheetProps> = ({
     }).start();
   };
 
-  // Determines the closest snap point based on velocity and position
   const getClosestSnapPoint = (currentY: number, velocityY: number) => {
     const currentPosition = SCREEN_HEIGHT - currentY;
 
@@ -107,7 +106,6 @@ const SimpleBottomSheet: React.FC<SimpleBottomSheetProps> = ({
     return distances[0].point;
   };
 
-  // Handles pan gesture events with boundary clamping
   const onGestureEvent = (event: any) => {
     const { translationY } = event.nativeEvent;
     lastGestureY.current = translationY;
@@ -124,7 +122,6 @@ const SimpleBottomSheet: React.FC<SimpleBottomSheetProps> = ({
     gestureTranslateY.setValue(clampedTranslation);
   };
 
-  // Handles gesture state changes (begin/end) for snapping behavior
   const onHandlerStateChange = (event: any) => {
     const { state, translationY, velocityY } = event.nativeEvent;
 
@@ -221,22 +218,16 @@ const styles = StyleSheet.create({
     backgroundColor: colors.background || '#ffffff',
     borderTopLeftRadius: 20,
     borderTopRightRadius: 20,
-    shadowColor: '#000',
-    shadowOffset: {
-      width: 0,
-      height: -3,
-    },
-    shadowOpacity: 0.27,
-    shadowRadius: 4.65,
+    boxShadow: '0px -6px 14px rgba(0, 0, 0, 0.10)',
     elevation: 6,
   },
   handle: {
-    width: 40,
-    height: 4,
+    width: 42,
+    height: 5,
     backgroundColor: colors.grey || '#cccccc',
-    borderRadius: 2,
+    borderRadius: 2.5,
     alignSelf: 'center',
-    marginTop: 8,
+    marginTop: 10,
     marginBottom: 8,
   },
   contentContainer: {
@@ -249,13 +240,13 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   title: {
-    fontSize: 24,
-    fontWeight: 'bold',
+    fontSize: 22,
+    fontWeight: '800',
     color: colors.text,
-    marginBottom: 16,
+    marginBottom: 12,
   },
   description: {
-    fontSize: 16,
+    fontSize: 15,
     color: colors.text,
     textAlign: 'center',
     marginBottom: 20,
