@@ -32,6 +32,24 @@ export interface Reel {
   thumb?: string;
 }
 
+export type FriendAddPolicy = 'Everyone' | 'Friends of Friends';
+export type ProfileVisibility = 'Public' | 'Only Friends';
+
+export interface AppSettings {
+  // Privacy
+  friendAddPolicy: FriendAddPolicy;
+  profileVisibility: ProfileVisibility;
+  // Notifications
+  notifyMessages: boolean;
+  notifyFriendRequests: boolean;
+  notifyDanceLive: boolean;
+  // Content
+  mutedConversations: string[]; // ids of chats - placeholder
+  feedPreferences: string[]; // e.g. ['Dance','Music']
+  language: string; // e.g. 'English'
+  safeMode: boolean;
+}
+
 interface ReelsContextType {
   user: User | null;
   setUser: (u: User | null) => void;
@@ -40,6 +58,8 @@ interface ReelsContextType {
   categories: DanceCategory[];
   reels: Reel[];
   addReel: (r: Omit<Reel, 'id' | 'likes' | 'createdAt'>) => void;
+  settings: AppSettings;
+  updateSettings: (patch: Partial<AppSettings>) => void;
 }
 
 const ReelsContext = createContext<ReelsContextType | undefined>(undefined);
@@ -105,6 +125,17 @@ const sampleReels: Reel[] = [
 export const ReelsProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [user, setUser] = useState<User | null>(null);
   const [reels, setReels] = useState<Reel[]>(sampleReels);
+  const [settings, setSettings] = useState<AppSettings>({
+    friendAddPolicy: 'Everyone',
+    profileVisibility: 'Public',
+    notifyMessages: true,
+    notifyFriendRequests: true,
+    notifyDanceLive: true,
+    mutedConversations: [],
+    feedPreferences: ['Dance', 'Music', 'Comedy'],
+    language: 'English',
+    safeMode: true,
+  });
 
   const addReel: ReelsContextType['addReel'] = (r) => {
     const id = `local_${Date.now()}`;
@@ -124,6 +155,10 @@ export const ReelsProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     });
   };
 
+  const updateSettings: ReelsContextType['updateSettings'] = (patch) => {
+    setSettings((prev) => ({ ...prev, ...patch }));
+  };
+
   const signOut = () => {
     console.log('Signing out');
     setUser(null);
@@ -138,8 +173,10 @@ export const ReelsProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       categories: defaultCategories,
       reels,
       addReel,
+      settings,
+      updateSettings,
     }),
-    [user, reels]
+    [user, reels, settings]
   );
 
   return <ReelsContext.Provider value={value}>{children}</ReelsContext.Provider>;
