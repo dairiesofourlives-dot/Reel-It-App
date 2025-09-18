@@ -5,7 +5,7 @@ import * as ImagePicker from 'expo-image-picker';
 import { colors, commonStyles } from '../../styles/commonStyles';
 import Button from '../../components/Button';
 import { useReels } from '../../state/reelsContext';
-import { Video } from 'expo-av';
+import { Audio, Video } from 'expo-av';
 
 export default function UploadScreen() {
   const { addReel, user } = useReels();
@@ -72,7 +72,8 @@ export default function UploadScreen() {
         Alert.alert('Permission required', 'We need camera permission to record.');
         return;
       }
-      const mic = await ImagePicker.requestMicrophonePermissionsAsync();
+      console.log('Requesting microphone permissions');
+      const mic = await Audio.requestPermissionsAsync();
       if (mic.status !== 'granted') {
         Alert.alert('Permission required', 'We need microphone permission to record.');
         return;
