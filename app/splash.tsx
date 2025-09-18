@@ -1,6 +1,6 @@
 
 import React, { useEffect, useRef } from 'react';
-import { View, StyleSheet, Text, Animated, Easing } from 'react-native';
+import { View, StyleSheet, Text, Animated, Easing, Pressable } from 'react-native';
 import { useRouter } from 'expo-router';
 import Button from '../components/Button';
 import { colors, commonStyles } from '../styles/commonStyles';
@@ -46,6 +46,11 @@ export default function SplashScreen() {
     router.push('/auth');
   };
 
+  const openTerms = () => {
+    console.log('Navigating to /terms');
+    router.push('/terms');
+  };
+
   return (
     <View style={[commonStyles.container, styles.container]}>
       <LinearGradient
@@ -73,6 +78,10 @@ export default function SplashScreen() {
       <Animated.View style={[styles.buttonWrap, { boxShadow: glowShadow as any }]}>
         <Button text="Get started" onPress={handleContinue} />
       </Animated.View>
+
+      <Pressable onPress={openTerms} style={({ pressed }) => [styles.termsWrap, pressed && { opacity: 0.7 }]}>
+        <Text style={styles.termsLink}>Reel’It – Terms of Use</Text>
+      </Pressable>
     </View>
   );
 }
@@ -125,5 +134,13 @@ const styles = StyleSheet.create({
   },
   buttonWrap: {
     width: '100%',
+  },
+  termsWrap: {
+    marginTop: 16,
+  },
+  termsLink: {
+    color: colors.primary,
+    textAlign: 'center',
+    fontWeight: '700',
   },
 });
