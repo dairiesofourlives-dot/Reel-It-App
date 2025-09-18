@@ -11,18 +11,15 @@ export default function TabsLayout() {
     <Tabs
       screenOptions={{
         headerShown: false,
-        tabBarActiveTintColor: colors.primary,
-        tabBarInactiveTintColor: colors.text,
+        tabBarShowLabel: false,
+        tabBarActiveTintColor: colors.primaryDark,
+        tabBarInactiveTintColor: colors.primaryLight,
         tabBarStyle: {
           backgroundColor: colors.backgroundAlt,
           borderTopColor: 'transparent',
           height: 64,
           paddingBottom: 10,
           paddingTop: 8,
-        },
-        tabBarLabelStyle: {
-          fontSize: 12,
-          fontWeight: '600',
         },
       }}
     >
