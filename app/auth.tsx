@@ -7,13 +7,20 @@ import Button from '../components/Button';
 import { useReels } from '../state/reelsContext';
 import { supabase } from '../lib/supabase';
 
+function sanitizeUsername(u: string) {
+  return u.trim().toLowerCase().replace(/[^a-z0-9._]/g, '');
+}
+
 export default function AuthScreen() {
   const router = useRouter();
   const { user, setUser } = useReels();
 
   const [mode, setMode] = useState<'signin' | 'signup'>('signin');
+  const [name, setName] = useState('');
+  const [username, setUsername] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [repeatPassword, setRepeatPassword] = useState('');
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
@@ -28,38 +35,168 @@ export default function AuthScreen() {
     return lengthOK && hasUpper && hasLower && hasNumber;
   };
 
+  const ensureProfile = async (sUser: any) => {
+    // Fetch existing profile or create one with metadata
+    try {
+      const { data: existing, error: selErr } = await supabase
+        .from('profiles')
+        .select('id, username, avatar_url, full_name')
+        .eq('user_id', sUser.id)
+        .maybeSingle();
+
+      let finalUsername = existing?.username;
+      let finalFullName = existing?.full_name;
+
+      if (!existing) {
+        let baseUsername =
+          sanitizeUsername(sUser.user_metadata?.username || (sUser.email || 'user').split('@')[0]) || `user${String(Date.now()).slice(-4)}`;
+        baseUsername = baseUsername.slice(0, 20) || `user${String(Date.now()).slice(-4)}`;
+        let attempt = baseUsername;
+
+        // Try insert; if unique conflict, try a few alternatives
+        for (let i = 0; i < 3; i++) {
+          const { data: ins, error: insErr } = await supabase.from('profiles').insert({
+            user_id: sUser.id,
+            username: attempt,
+            full_name: sUser.user_metadata?.full_name || '',
+            avatar_url: null,
+          }).select('id, username, full_name').single();
+
+          if (!insErr && ins) {
+            finalUsername = ins.username;
+            finalFullName = ins.full_name;
+            break;
+          }
+          if (insErr && (insErr as any).message?.toLowerCase?.().includes('duplicate')) {
+            attempt = `${baseUsername}${Math.floor(Math.random() * 10000)}`;
+            continue;
+          }
+          if (insErr) {
+            console.log('Insert profile error', insErr);
+            break;
+          }
+        }
+      } else {
+        // Update profile with metadata if missing
+        const metaUsername = sanitizeUsername(sUser.user_metadata?.username || '');
+        const metaFullName = (sUser.user_metadata?.full_name || '').trim();
+        const needsUpdate = (!!metaUsername && metaUsername !== existing.username) || (!!metaFullName && metaFullName !== existing.full_name);
+        if (needsUpdate) {
+          let newUsername = metaUsername || existing.username;
+          // attempt update; on duplicate, append number
+          for (let i = 0; i < 2; i++) {
+            const { data: upd, error: updErr } = await supabase
+              .from('profiles')
+              .update({
+                username: newUsername,
+                full_name: metaFullName || existing.full_name,
+              })
+              .eq('user_id', sUser.id)
+              .select('id, username, full_name')
+              .single();
+            if (!updErr && upd) {
+              finalUsername = upd.username;
+              finalFullName = upd.full_name;
+              break;
+            }
+            if (updErr && (updErr as any).message?.toLowerCase?.().includes('duplicate')) {
+              newUsername = `${metaUsername}${Math.floor(Math.random() * 10000)}`;
+              continue;
+            }
+            if (updErr) {
+              console.log('Update profile error', updErr);
+              break;
+            }
+          }
+        } else {
+          finalUsername = existing.username;
+          finalFullName = existing.full_name;
+        }
+      }
+
+      finalUsername = finalUsername || sanitizeUsername((sUser.email || 'user').split('@')[0]) || `user${String(Date.now()).slice(-4)}`;
+
+      // Update local state
+      setUser({ id: sUser.id, username: finalUsername, avatar: undefined });
+      console.log('Profile ensured with username:', finalUsername, 'name:', finalFullName);
+    } catch (e) {
+      console.log('ensureProfile error', e);
+      const fallback = sanitizeUsername((sUser.email || 'user').split('@')[0]) || `user${String(Date.now()).slice(-4)}`;
+      setUser({ id: sUser.id, username: fallback, avatar: undefined });
+    }
+  };
+
   const onSubmit = async () => {
     try {
       console.log('Submitting auth form', { mode, emailLength: email.length });
-      if (!email || !password) {
-        Alert.alert('Missing info', 'Please fill in email and password.');
-        return;
-      }
       const emailRegex = /[^@]+@[^.]+\..+/;
-      if (!emailRegex.test(email)) {
-        Alert.alert('Invalid email', 'Please provide a valid email address.');
-        return;
-      }
-      if (!isStrongPassword(password)) {
-        Alert.alert('Weak password', 'Use at least 8 characters, with uppercase, lowercase, and a number.');
-        return;
-      }
 
-      setLoading(true);
       if (mode === 'signup') {
+        const cleanedUsername = sanitizeUsername(username);
+        if (!name.trim()) {
+          Alert.alert('Missing info', 'Please enter your name.');
+          return;
+        }
+        if (!cleanedUsername) {
+          Alert.alert('Invalid username', 'Choose a username with letters, numbers, dots or underscores.');
+          return;
+        }
+        if (cleanedUsername.length < 3 || cleanedUsername.length > 20) {
+          Alert.alert('Invalid username', 'Username must be between 3 and 20 characters.');
+          return;
+        }
+        if (!email || !emailRegex.test(email)) {
+          Alert.alert('Invalid email', 'Please provide a valid email address.');
+          return;
+        }
+        if (!password || !repeatPassword) {
+          Alert.alert('Missing password', 'Please enter and confirm your password.');
+          return;
+        }
+        if (password !== repeatPassword) {
+          Alert.alert('Passwords do not match', 'Please make sure the passwords are the same.');
+          return;
+        }
+        if (!isStrongPassword(password)) {
+          Alert.alert('Weak password', 'Use at least 8 characters, with uppercase, lowercase, and a number.');
+          return;
+        }
+
+        setLoading(true);
         const { data, error } = await supabase.auth.signUp({
           email,
           password,
           options: {
             emailRedirectTo: 'https://natively.dev/email-confirmed',
+            data: {
+              full_name: name.trim(),
+              username: cleanedUsername,
+            },
           },
         });
         if (error) {
           Alert.alert('Sign up failed', error.message);
         } else {
-          Alert.alert('Verify your email', 'We sent a verification link. Please verify your email to complete sign up.');
+          Alert.alert(
+            'Verify your email',
+            'We sent a verification link. Please verify your email to complete sign up.'
+          );
         }
       } else {
+        if (!email || !emailRegex.test(email)) {
+          Alert.alert('Invalid email', 'Please provide a valid email address.');
+          return;
+        }
+        if (!password) {
+          Alert.alert('Missing password', 'Please enter your password.');
+          return;
+        }
+        if (!isStrongPassword(password)) {
+          // Allow sign-in even if not strong, but warn user for consistency we will not block here.
+          console.log('Password strength check skipped for sign-in.');
+        }
+
+        setLoading(true);
         const { data, error } = await supabase.auth.signInWithPassword({ email, password });
         if (error) {
           Alert.alert('Sign in failed', error.message);
@@ -72,9 +209,12 @@ export default function AuthScreen() {
           setLoading(false);
           return;
         }
-        const username = (sUser.email || 'user').split('@')[0];
-        setUser({ id: sUser.id, username, avatar: undefined });
+
+        // Ensure profile in DB and set local context
+        await ensureProfile(sUser);
+
         Alert.alert('Success', 'Signed in successfully.');
+        // Navigate to Home (Feed tab)
         router.replace('/(tabs)/feed');
       }
     } catch (e: any) {
@@ -116,6 +256,31 @@ export default function AuthScreen() {
       </View>
 
       <View style={styles.form}>
+        {mode === 'signup' && (
+          <>
+            <Text style={styles.label}>Name</Text>
+            <TextInput
+              value={name}
+              onChangeText={setName}
+              placeholder="Your full name"
+              placeholderTextColor={colors.grey}
+              autoCapitalize="words"
+              style={styles.input}
+              returnKeyType="next"
+            />
+            <Text style={styles.label}>Username</Text>
+            <TextInput
+              value={username}
+              onChangeText={(t) => setUsername(sanitizeUsername(t))}
+              placeholder="username"
+              placeholderTextColor={colors.grey}
+              autoCapitalize="none"
+              style={styles.input}
+              returnKeyType="next"
+            />
+          </>
+        )}
+
         <Text style={styles.label}>Email</Text>
         <TextInput
           value={email}
@@ -127,6 +292,7 @@ export default function AuthScreen() {
           style={styles.input}
           returnKeyType="next"
         />
+
         <Text style={styles.label}>Password</Text>
         <TextInput
           value={password}
@@ -135,14 +301,32 @@ export default function AuthScreen() {
           placeholderTextColor={colors.grey}
           secureTextEntry
           style={styles.input}
-          returnKeyType="done"
+          returnKeyType={mode === 'signin' ? 'done' : 'next'}
         />
+
+        {mode === 'signup' && (
+          <>
+            <Text style={styles.label}>Repeat Password</Text>
+            <TextInput
+              value={repeatPassword}
+              onChangeText={setRepeatPassword}
+              placeholder="••••••••"
+              placeholderTextColor={colors.grey}
+              secureTextEntry
+              style={styles.input}
+              returnKeyType="done"
+            />
+          </>
+        )}
+
         <Text style={styles.hint}>Password must be 8+ chars, include uppercase, lowercase, and a number.</Text>
 
-        <Button text={loading ? 'Please wait…' : mode === 'signin' ? 'Sign In' : 'Sign Up'} onPress={onSubmit} />
-        <Pressable onPress={onForgot} style={{ alignSelf: 'flex-end', paddingVertical: 8 }}>
-          <Text style={{ color: colors.primary, fontWeight: '700' }}>Forgot password?</Text>
-        </Pressable>
+        <Button text={loading ? 'Please wait…' : mode === 'signin' ? 'Sign In' : 'Create Account'} onPress={onSubmit} />
+        {mode === 'signin' && (
+          <Pressable onPress={onForgot} style={{ alignSelf: 'flex-end', paddingVertical: 8 }}>
+            <Text style={{ color: colors.primary, fontWeight: '700' }}>Forgot password?</Text>
+          </Pressable>
+        )}
       </View>
 
       {user && (
