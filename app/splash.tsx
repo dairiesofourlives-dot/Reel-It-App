@@ -13,8 +13,8 @@ export default function SplashScreen() {
   }, []);
 
   const handleContinue = () => {
-    console.log('Navigating to /home');
-    router.push('/home');
+    console.log('Navigating to /(tabs)/feed');
+    router.push('/(tabs)/feed');
   };
 
   return (
@@ -24,7 +24,7 @@ export default function SplashScreen() {
         resizeMode="contain"
         style={styles.logo}
       />
-      <Text style={styles.title}>Reel'It</Text>
+      <Text style={styles.title}>Reel&apos;It</Text>
       <Text style={styles.subtitle}>Dance. Create. Share.</Text>
       <View style={styles.buttonWrap}>
         <Button text="Enter" onPress={handleContinue} />
