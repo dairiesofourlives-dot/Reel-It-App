@@ -10,7 +10,7 @@ import { useRouter } from 'expo-router';
 import * as WebBrowser from 'expo-web-browser';
 
 export default function ProfileScreen() {
-  const { user, signOut, settings, updateSettings } = useReels();
+  const { user, reels, saved, signOut, settings, updateSettings } = useReels();
   const router = useRouter();
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [activeSheet, setActiveSheet] = useState<
@@ -24,10 +24,22 @@ export default function ProfileScreen() {
     setSettingsOpen(true);
   };
   const closeSettings = () => setSettingsOpen(false);
-
   const handleEdit = () => router.push('/profile/edit');
 
   const avatarUri = typeof user?.avatar === 'string' ? user?.avatar : undefined;
+
+  const myReels = useMemo(() => {
+    if (!user) return [];
+    return reels.filter((r) => r.userId === user.id);
+  }, [reels, user]);
+
+  const savedReels = useMemo(() => reels.filter((r) => saved.includes(r.id)), [reels, saved]);
+
+  const stats = {
+    following: 0,
+    followers: 0,
+    posts: myReels.length,
+  };
 
   const RootSheet = () => (
     <>
@@ -239,7 +251,7 @@ export default function ProfileScreen() {
     <>
       <SheetHeader title="About Reel'It" onBack={() => setActiveSheet('root')} />
       <Section title="Our Mission">
-        <Text style={styles.description}>Reel'It is built by Se-Mo Media Solutions to empower dancers and creators across Africa.
+        <Text style={styles.description}>Reel&apos;It is built by Se-Mo Media Solutions to empower dancers and creators across Africa.
 We believe in giving young talent a digital stage to shine, connect, and grow their careers.
 
 Our mission: Stream. Connect. Dance.</Text>
@@ -274,52 +286,116 @@ Our mission: Stream. Connect. Dance.</Text>
 
   return (
     <View style={[commonStyles.wrapper, styles.container]}>
-      <Text style={styles.title}>Your Profile</Text>
-      {user ? (
-        <>
-          <View style={styles.userRow}>
-            {avatarUri ? (
-              <Image source={{ uri: avatarUri }} style={styles.avatar} />
-            ) : (
-              <View style={styles.avatarPlaceholder}>
-                <Text style={styles.avatarInitials}>{user.username.slice(0, 2).toUpperCase()}</Text>
+      <ScrollView contentContainerStyle={{ paddingBottom: 80 }}>
+        <Text style={styles.title}>Your Profile</Text>
+        {user ? (
+          <>
+            <View style={styles.userRow}>
+              {avatarUri ? (
+                <Image source={{ uri: avatarUri }} style={styles.avatar} />
+              ) : (
+                <View style={styles.avatarPlaceholder}>
+                  <Text style={styles.avatarInitials}>{user.username.slice(0, 2).toUpperCase()}</Text>
+                </View>
+              )}
+              <View style={{ marginLeft: 14 }}>
+                <Text style={styles.username}>@{user.username}</Text>
+                <Text style={styles.meta}>Tap settings to manage account</Text>
               </View>
-            )}
-            <View style={{ marginLeft: 14 }}>
-              <Text style={styles.username}>@{user.username}</Text>
-              <Text style={styles.meta}>Tap settings to manage account</Text>
             </View>
-          </View>
-          <View style={styles.actions}>
-            <Button text="Edit Profile" onPress={handleEdit} />
-            <Button
-              text="Settings"
-              onPress={openSettings}
-              style={{ backgroundColor: colors.backgroundAlt }}
-              textStyle={{ color: colors.text }}
-            />
-          </View>
-        </>
-      ) : (
-        <>
-          <Text style={styles.subtitle}>You are not signed in.</Text>
-          <View style={styles.actions}>
-            <Button text="Sign In / Sign Up" onPress={() => router.push('/auth')} />
-            <Button
-              text="Settings"
-              onPress={openSettings}
-              style={{ backgroundColor: colors.backgroundAlt }}
-              textStyle={{ color: colors.text }}
-            />
-          </View>
-        </>
-      )}
+
+            {/* Stats Row */}
+            <View style={styles.statsRow}>
+              <Stat label="Following" value={stats.following} />
+              <Stat label="Followers" value={stats.followers} />
+              <Stat label="Posts" value={stats.posts} />
+            </View>
+
+            <View style={styles.actions}>
+              <Button text="Edit Profile" onPress={handleEdit} />
+              <Button
+                text="Settings"
+                onPress={openSettings}
+                style={{ backgroundColor: colors.backgroundAlt }}
+                textStyle={{ color: colors.text }}
+              />
+            </View>
+
+            {/* Uploaded Reels Grid */}
+            <Text style={styles.sectionHeader}>Your Reels</Text>
+            <View style={styles.grid}>
+              {myReels.length === 0 ? (
+                <Text style={styles.empty}>No reels yet. Upload your first reel!</Text>
+              ) : (
+                myReels.map((r) => <ReelGridItem key={r.id} thumb={r.thumb} />)
+              )}
+            </View>
+
+            {/* Saved Reels Grid */}
+            <Text style={styles.sectionHeader}>Saved Reels</Text>
+            <View style={styles.grid}>
+              {savedReels.length === 0 ? (
+                <Text style={styles.empty}>No saved reels yet.</Text>
+              ) : (
+                savedReels.map((r) => <ReelGridItem key={r.id} thumb={r.thumb} />)
+              )}
+            </View>
+          </>
+        ) : (
+          <>
+            <Text style={styles.subtitle}>You are not signed in.</Text>
+            <View style={styles.actions}>
+              <Button text="Sign In / Sign Up" onPress={() => router.push('/auth')} />
+              <Button
+                text="Settings"
+                onPress={openSettings}
+                style={{ backgroundColor: colors.backgroundAlt }}
+                textStyle={{ color: colors.text }}
+              />
+            </View>
+
+            {/* Show empty grids for consistency */}
+            <Text style={styles.sectionHeader}>Your Reels</Text>
+            <View style={styles.grid}>
+              <Text style={styles.empty}>Sign in to see your uploaded reels.</Text>
+            </View>
+            <Text style={styles.sectionHeader}>Saved Reels</Text>
+            <View style={styles.grid}>
+              <Text style={styles.empty}>Sign in to see saved reels.</Text>
+            </View>
+          </>
+        )}
+      </ScrollView>
 
       <SimpleBottomSheet isVisible={settingsOpen} onClose={closeSettings}>
         <ScrollView contentContainerStyle={{ paddingBottom: 30 }}>
           {renderActiveSheet()}
         </ScrollView>
       </SimpleBottomSheet>
+    </View>
+  );
+}
+
+function ReelGridItem({ thumb }: { thumb?: string }) {
+  return (
+    <View style={gridStyles.item}>
+      {thumb ? (
+        <Image source={{ uri: thumb }} style={gridStyles.media} />
+      ) : (
+        <View style={gridStyles.placeholder}>
+          <Ionicons name="play-circle" size={28} color={colors.primary} />
+          <Text style={gridStyles.placeholderText}>Reel</Text>
+        </View>
+      )}
+    </View>
+  );
+}
+
+function Stat({ label, value }: { label: string; value: number }) {
+  return (
+    <View style={styles.stat}>
+      <Text style={styles.statValue}>{value}</Text>
+      <Text style={styles.statLabel}>{label}</Text>
     </View>
   );
 }
@@ -471,6 +547,43 @@ const styles = StyleSheet.create({
   },
   actions: {
     gap: 10,
+    marginTop: 6,
+  },
+  statsRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    backgroundColor: colors.card,
+    borderWidth: 1,
+    borderColor: colors.divider,
+    borderRadius: 12,
+    padding: 12,
+    boxShadow: '0px 6px 14px rgba(0,0,0,0.06)',
+    elevation: 2,
+    marginBottom: 12,
+  },
+  stat: {
+    alignItems: 'center',
+    flex: 1,
+  },
+  statValue: {
+    fontSize: 18,
+    fontWeight: '900',
+    color: colors.text,
+  },
+  statLabel: {
+    color: colors.grey,
+  },
+  sectionHeader: {
+    fontSize: 16,
+    fontWeight: '800',
+    color: colors.text,
+    marginTop: 14,
+    marginBottom: 8,
+  },
+  grid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 6,
   },
   sheetHeader: {
     paddingHorizontal: 4,
@@ -606,5 +719,31 @@ const styles = StyleSheet.create({
   linkText: {
     color: colors.primary,
     fontWeight: '800',
+  },
+});
+
+const gridStyles = StyleSheet.create({
+  item: {
+    width: '32%',
+    aspectRatio: 1,
+    borderRadius: 10,
+    overflow: 'hidden',
+    backgroundColor: colors.backgroundAlt,
+    borderWidth: 1,
+    borderColor: colors.divider,
+  },
+  media: {
+    width: '100%',
+    height: '100%',
+  },
+  placeholder: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+  },
+  placeholderText: {
+    color: colors.grey,
+    fontWeight: '700',
   },
 });

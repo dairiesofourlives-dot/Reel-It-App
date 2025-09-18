@@ -1,18 +1,49 @@
 
 import React from 'react';
-import { View, Text, Image, StyleSheet } from 'react-native';
-import { Reel } from '../state/reelsContext';
+import { View, Text, Image, StyleSheet, Pressable } from 'react-native';
+import { Reel, useReels } from '../state/reelsContext';
 import { colors } from '../styles/commonStyles';
 import { Ionicons } from '@expo/vector-icons';
+import { Video } from 'expo-av';
 
 interface ReelCardProps {
   reel: Reel;
 }
 
 export default function ReelCard({ reel }: ReelCardProps) {
+  const { saved, toggleSave } = useReels();
+  const isSaved = saved.includes(reel.id);
+
+  const isVideo =
+    /\.mp4|\.mov|^http.*\.(mp4|mov)/i.test(reel.mediaUri) ||
+    reel.mediaUri.includes('gtv-videos-bucket');
+
   return (
     <View style={styles.card}>
-      <Image source={{ uri: reel.mediaUri }} style={styles.media} resizeMode="cover" />
+      {isVideo ? (
+        <Video
+          source={{ uri: reel.mediaUri }}
+          style={styles.media}
+          shouldPlay={false}
+          isMuted
+          resizeMode="cover"
+          useNativeControls={false}
+        />
+      ) : (
+        <Image source={{ uri: reel.mediaUri }} style={styles.media} resizeMode="cover" />
+      )}
+
+      {!!reel.overlayText && (
+        <View style={styles.textOverlay}>
+          <Text style={styles.overlayText}>{reel.overlayText}</Text>
+        </View>
+      )}
+
+      {/* Filter overlay simulation */}
+      {reel.filter === 'mono' && <View style={[styles.filterOverlay, { backgroundColor: 'rgba(0,0,0,0.35)' }]} />}
+      {reel.filter === 'warm' && <View style={[styles.filterOverlay, { backgroundColor: 'rgba(255,165,0,0.15)' }]} />}
+      {reel.filter === 'cool' && <View style={[styles.filterOverlay, { backgroundColor: 'rgba(0,128,255,0.15)' }]} />}
+
       <View style={styles.overlay}>
         <View style={styles.topRow}>
           <Text style={styles.username}>@{reel.username}</Text>
@@ -22,11 +53,20 @@ export default function ReelCard({ reel }: ReelCardProps) {
         </View>
         <View style={styles.bottomRow}>
           <Ionicons name="musical-notes" size={16} color={colors.background} />
-          <Text style={styles.sound} numberOfLines={1}>{reel.soundName}</Text>
+          <Text style={styles.sound} numberOfLines={1}>
+            {reel.soundName}
+          </Text>
           <View style={styles.likes}>
             <Ionicons name="heart" size={16} color={colors.background} />
             <Text style={styles.likeText}>{reel.likes}</Text>
           </View>
+          <Pressable
+            onPress={() => toggleSave(reel.id)}
+            hitSlop={12}
+            style={({ pressed }) => [styles.saveBtn, pressed && { opacity: 0.8 }]}
+          >
+            <Ionicons name={isSaved ? 'bookmark' : 'bookmark-outline'} size={20} color={isSaved ? colors.accent : '#fff'} />
+          </Pressable>
         </View>
       </View>
     </View>
@@ -46,6 +86,26 @@ const styles = StyleSheet.create({
   media: {
     width: '100%',
     height: '100%',
+  },
+  filterOverlay: {
+    position: 'absolute',
+    top: 0,
+    right: 0,
+    left: 0,
+    bottom: 0,
+  },
+  textOverlay: {
+    position: 'absolute',
+    top: 16,
+    left: 16,
+    right: 16,
+    backgroundColor: 'rgba(0,0,0,0.35)',
+    padding: 6,
+    borderRadius: 8,
+  },
+  overlayText: {
+    color: '#fff',
+    fontWeight: '800',
   },
   overlay: {
     position: 'absolute',
@@ -97,5 +157,8 @@ const styles = StyleSheet.create({
   likeText: {
     color: '#fff',
     fontWeight: '700',
+  },
+  saveBtn: {
+    padding: 4,
   },
 });

@@ -5,6 +5,7 @@ import { useRouter } from 'expo-router';
 import { colors, commonStyles } from '../styles/commonStyles';
 import Button from '../components/Button';
 import { useReels } from '../state/reelsContext';
+import { supabase } from '../lib/supabase';
 
 export default function AuthScreen() {
   const router = useRouter();
@@ -13,33 +14,87 @@ export default function AuthScreen() {
   const [mode, setMode] = useState<'signin' | 'signup'>('signin');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [loading, setLoading] = useState(false);
 
   useEffect(() => {
     console.log('AuthScreen mounted', { mode });
   }, [mode]);
 
-  const onSubmit = () => {
-    console.log('Submitting auth form', { mode, emailLength: email.length });
-    if (!email || !password) {
-      Alert.alert('Missing info', 'Please fill in email and password.');
-      return;
-    }
-    if (mode === 'signup') {
-      Alert.alert('Verify your email', 'We sent a verification link. Please verify your email to complete sign up.');
-    }
-    const username = email.split('@')[0] || 'user';
-    setUser({
-      id: `u_${Date.now()}`,
-      username,
-      avatar: undefined,
-    });
-    Alert.alert('Success', mode === 'signup' ? 'Account created (local). You are now signed in.' : 'Signed in (local).');
-    router.replace('/(tabs)/feed');
+  const isStrongPassword = (pwd: string) => {
+    const lengthOK = pwd.length >= 8;
+    const hasUpper = /[A-Z]/.test(pwd);
+    const hasLower = /[a-z]/.test(pwd);
+    const hasNumber = /[0-9]/.test(pwd);
+    return lengthOK && hasUpper && hasLower && hasNumber;
   };
 
-  const onContinueGuest = () => {
-    console.log('Continuing as guest');
-    router.replace('/(tabs)/feed');
+  const onSubmit = async () => {
+    try {
+      console.log('Submitting auth form', { mode, emailLength: email.length });
+      if (!email || !password) {
+        Alert.alert('Missing info', 'Please fill in email and password.');
+        return;
+      }
+      const emailRegex = /[^@]+@[^.]+\..+/;
+      if (!emailRegex.test(email)) {
+        Alert.alert('Invalid email', 'Please provide a valid email address.');
+        return;
+      }
+      if (!isStrongPassword(password)) {
+        Alert.alert('Weak password', 'Use at least 8 characters, with uppercase, lowercase, and a number.');
+        return;
+      }
+
+      setLoading(true);
+      if (mode === 'signup') {
+        const { data, error } = await supabase.auth.signUp({
+          email,
+          password,
+          options: {
+            emailRedirectTo: 'https://natively.dev/email-confirmed',
+          },
+        });
+        if (error) {
+          Alert.alert('Sign up failed', error.message);
+        } else {
+          Alert.alert('Verify your email', 'We sent a verification link. Please verify your email to complete sign up.');
+        }
+      } else {
+        const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+        if (error) {
+          Alert.alert('Sign in failed', error.message);
+          setLoading(false);
+          return;
+        }
+        const sUser = data.user;
+        if (!sUser) {
+          Alert.alert('Sign in', 'Email not confirmed yet. Please verify your email.');
+          setLoading(false);
+          return;
+        }
+        const username = (sUser.email || 'user').split('@')[0];
+        setUser({ id: sUser.id, username, avatar: undefined });
+        Alert.alert('Success', 'Signed in successfully.');
+        router.replace('/(tabs)/feed');
+      }
+    } catch (e: any) {
+      console.log('Auth error', e);
+      Alert.alert('Error', e?.message || 'Something went wrong');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const onForgot = async () => {
+    if (!email) {
+      Alert.alert('Enter email', 'Type your email first to receive a reset link.');
+      return;
+    }
+    const { error } = await supabase.auth.resetPasswordForEmail(email, {
+      redirectTo: 'https://natively.dev/email-confirmed',
+    });
+    if (error) Alert.alert('Reset failed', error.message);
+    else Alert.alert('Check your inbox', 'Password reset instructions sent.');
   };
 
   return (
@@ -82,14 +137,12 @@ export default function AuthScreen() {
           style={styles.input}
           returnKeyType="done"
         />
+        <Text style={styles.hint}>Password must be 8+ chars, include uppercase, lowercase, and a number.</Text>
 
-        <Button text={mode === 'signin' ? 'Sign In' : 'Sign Up'} onPress={onSubmit} />
-        <Button
-          text="Continue as Guest"
-          onPress={onContinueGuest}
-          style={{ backgroundColor: colors.backgroundAlt }}
-          textStyle={{ color: colors.text }}
-        />
+        <Button text={loading ? 'Please wait…' : mode === 'signin' ? 'Sign In' : 'Sign Up'} onPress={onSubmit} />
+        <Pressable onPress={onForgot} style={{ alignSelf: 'flex-end', paddingVertical: 8 }}>
+          <Text style={{ color: colors.primary, fontWeight: '700' }}>Forgot password?</Text>
+        </Pressable>
       </View>
 
       {user && (
@@ -170,6 +223,10 @@ const styles = StyleSheet.create({
     color: colors.text,
     boxShadow: '0 2px 6px rgba(0,0,0,0.06)',
     elevation: 1,
+  },
+  hint: {
+    color: colors.grey,
+    marginTop: 4,
   },
   already: {
     textAlign: 'center',

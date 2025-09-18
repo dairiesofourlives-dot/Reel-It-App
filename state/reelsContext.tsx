@@ -30,6 +30,9 @@ export interface Reel {
   likes: number;
   createdAt: number;
   thumb?: string;
+  overlayText?: string;
+  filter?: 'none' | 'mono' | 'warm' | 'cool';
+  aspect?: '9:16' | '1:1' | '16:9';
 }
 
 export type FriendAddPolicy = 'Everyone' | 'Friends of Friends';
@@ -58,6 +61,8 @@ interface ReelsContextType {
   categories: DanceCategory[];
   reels: Reel[];
   addReel: (r: Omit<Reel, 'id' | 'likes' | 'createdAt'>) => void;
+  saved: string[];
+  toggleSave: (id: string) => void;
   settings: AppSettings;
   updateSettings: (patch: Partial<AppSettings>) => void;
 }
@@ -91,7 +96,7 @@ const sampleReels: Reel[] = [
     id: '1',
     userId: 'u1',
     username: 'dance.africa',
-    mediaUri: 'https://images.unsplash.com/photo-1511771760608-0f1f1d2f64c0?q=80&w=1200&auto=format&fit=crop',
+    mediaUri: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4',
     soundName: 'Amapiano Groove',
     category: 'Amapiano',
     likes: 128,
@@ -102,7 +107,7 @@ const sampleReels: Reel[] = [
     id: '2',
     userId: 'u2',
     username: 'pantsula.core',
-    mediaUri: 'https://images.unsplash.com/photo-1513617330650-6f9f2b26bc98?q=80&w=1200&auto=format&fit=crop',
+    mediaUri: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ElephantsDream.mp4',
     soundName: 'Street Beat 102',
     category: 'Pantsula',
     likes: 256,
@@ -113,7 +118,7 @@ const sampleReels: Reel[] = [
     id: '3',
     userId: 'u3',
     username: 'afro.motion',
-    mediaUri: 'https://images.unsplash.com/photo-1543030717-6081a8c0d362?q=80&w=1200&auto=format&fit=crop',
+    mediaUri: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerJoyrides.mp4',
     soundName: 'Afrobeat Hybrid #7',
     category: 'Afrobeat Hybrids',
     likes: 89,
@@ -125,6 +130,7 @@ const sampleReels: Reel[] = [
 export const ReelsProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [user, setUser] = useState<User | null>(null);
   const [reels, setReels] = useState<Reel[]>(sampleReels);
+  const [saved, setSaved] = useState<string[]>([]);
   const [settings, setSettings] = useState<AppSettings>({
     friendAddPolicy: 'Everyone',
     profileVisibility: 'Public',
@@ -144,6 +150,10 @@ export const ReelsProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     const newReel: Reel = { id, likes, createdAt, ...r };
     console.log('Adding new reel', newReel);
     setReels((prev) => [newReel, ...prev]);
+  };
+
+  const toggleSave: ReelsContextType['toggleSave'] = (id) => {
+    setSaved((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
   };
 
   const updateProfile: ReelsContextType['updateProfile'] = (patch) => {
@@ -173,10 +183,12 @@ export const ReelsProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       categories: defaultCategories,
       reels,
       addReel,
+      saved,
+      toggleSave,
       settings,
       updateSettings,
     }),
-    [user, reels, settings]
+    [user, reels, saved, settings]
   );
 
   return <ReelsContext.Provider value={value}>{children}</ReelsContext.Provider>;
