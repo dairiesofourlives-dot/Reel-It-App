@@ -9,6 +9,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import * as WebBrowser from 'expo-web-browser';
 import { supabase } from '../../lib/supabase';
+import { LinearGradient } from 'expo-linear-gradient';
 
 export default function ProfileScreen() {
   const { user, reels, saved, signOut, settings, updateSettings } = useReels();
@@ -17,10 +18,11 @@ export default function ProfileScreen() {
   const [activeSheet, setActiveSheet] = useState<
     'root' | 'account' | 'privacy' | 'notifications' | 'content' | 'support' | 'community' | 'report' | 'about' | 'security'
   >('root');
-  const [activeTab, setActiveTab] = useState<'reels' | 'saved'>('reels');
+  const [activeTab, setActiveTab] = useState<'reels' | 'tagged'>('reels');
 
   const [followers, setFollowers] = useState<number>(0);
   const [following, setFollowing] = useState<number>(0);
+  const [taggedReels, setTaggedReels] = useState<any[]>([]);
 
   console.log('ProfileScreen render user:', user?.username);
 
@@ -40,6 +42,25 @@ export default function ProfileScreen() {
           .select('*', { head: true, count: 'exact' })
           .eq('follower_id', user.id);
         if (!followingErr && mounted) setFollowing(followingCount || 0);
+
+        // Load tagged reels
+        const { data: tags, error: tagsErr } = await supabase
+          .from('reel_tags')
+          .select('reel_id')
+          .eq('tagged_user_id', user.id);
+        
+        if (!tagsErr && tags && tags.length > 0) {
+          const reelIds = tags.map(t => t.reel_id);
+          const { data: taggedReelsData, error: reelsErr } = await supabase
+            .from('reels')
+            .select('*')
+            .in('id', reelIds)
+            .order('created_at', { ascending: false });
+          
+          if (!reelsErr && mounted) {
+            setTaggedReels(taggedReelsData || []);
+          }
+        }
       } catch (e) {
         console.log('loadCounts error', e);
       }
@@ -63,8 +84,6 @@ export default function ProfileScreen() {
     if (!user) return [];
     return reels.filter((r) => r.userId === user.id);
   }, [reels, user]);
-
-  const savedReels = useMemo(() => reels.filter((r) => saved.includes(r.id)), [reels, saved]);
 
   const stats = {
     following,
@@ -245,7 +264,7 @@ export default function ProfileScreen() {
   const SupportSheet = () => (
     <>
       <SheetHeader title="Contact Support" onBack={() => setActiveSheet('root')} />
-    <Section title="If you need extra help, our support team is ready:">
+      <Section title="If you need extra help, our support team is ready:">
         <LinkRow label="Email" value="info@se-mo.com" onPress={() => Linking.openURL('mailto:info@se-mo.com')} />
         <LinkRow label="Website" value="www.se-mo.com/help" onPress={() => WebBrowser.openBrowserAsync('https://www.se-mo.com/help')} />
         <Text style={styles.description}>In-App: Profile → Help & Support → Contact Us to send a direct message.</Text>
@@ -330,19 +349,19 @@ Our mission: Stream. Connect. Dance.</Text>
   const GridTabs = () => (
     <View style={styles.gridTabs}>
       <Pressable onPress={() => setActiveTab('reels')} style={[styles.gridTabBtn, activeTab === 'reels' && styles.gridTabBtnActive]}>
-        <Ionicons name="grid-outline" size={18} color={activeTab === 'reels' ? '#fff' : colors.text} />
+        <Ionicons name="grid-outline" size={20} color={activeTab === 'reels' ? '#fff' : colors.text} />
         <Text style={[styles.gridTabTxt, activeTab === 'reels' && styles.gridTabTxtActive]}>Reels</Text>
       </Pressable>
-      <Pressable onPress={() => setActiveTab('saved')} style={[styles.gridTabBtn, activeTab === 'saved' && styles.gridTabBtnActive]}>
-        <Ionicons name="bookmark-outline" size={18} color={activeTab === 'saved' ? '#fff' : colors.text} />
-        <Text style={[styles.gridTabTxt, activeTab === 'saved' && styles.gridTabTxtActive]}>Saved</Text>
+      <Pressable onPress={() => setActiveTab('tagged')} style={[styles.gridTabBtn, activeTab === 'tagged' && styles.gridTabBtnActive]}>
+        <Ionicons name="pricetag-outline" size={20} color={activeTab === 'tagged' ? '#fff' : colors.text} />
+        <Text style={[styles.gridTabTxt, activeTab === 'tagged' && styles.gridTabTxtActive]}>Tagged</Text>
       </Pressable>
     </View>
   );
 
   return (
     <View style={[commonStyles.wrapper, styles.container]}>
-      <ScrollView contentContainerStyle={{ paddingBottom: 80 }}>
+      <ScrollView contentContainerStyle={{ paddingBottom: 80 }} showsVerticalScrollIndicator={false}>
         {/* Top bar with brand and settings icon */}
         <View style={styles.topBar}>
           <Text style={styles.brand}>Reel&apos;It</Text>
@@ -353,34 +372,80 @@ Our mission: Stream. Connect. Dance.</Text>
 
         {user ? (
           <>
-            <View style={styles.userRow}>
-              {avatarUri ? (
-                <Image source={{ uri: avatarUri }} style={styles.avatar} />
-              ) : (
-                <View style={styles.avatarPlaceholder}>
-                  <Text style={styles.avatarInitials}>{user.username.slice(0, 2).toUpperCase()}</Text>
+            {/* Profile Header with Gradient Background */}
+            <LinearGradient
+              colors={[colors.primary + '20', colors.primaryLight + '10', 'transparent']}
+              style={styles.profileHeader}
+            >
+              <View style={styles.userRow}>
+                {avatarUri ? (
+                  <View style={styles.avatarContainer}>
+                    <Image source={{ uri: avatarUri }} style={styles.avatar} />
+                    <View style={styles.avatarRing} />
+                  </View>
+                ) : (
+                  <View style={styles.avatarContainer}>
+                    <View style={styles.avatarPlaceholder}>
+                      <Text style={styles.avatarInitials}>{user.username.slice(0, 2).toUpperCase()}</Text>
+                    </View>
+                    <View style={styles.avatarRing} />
+                  </View>
+                )}
+                <View style={{ marginLeft: 16, flex: 1 }}>
+                  <Text style={styles.username}>@{user.username}</Text>
+                  {!!user.bio && <Text style={styles.bio} numberOfLines={3}>{user.bio}</Text>}
                 </View>
-              )}
-              <View style={{ marginLeft: 14, flex: 1 }}>
-                <Text style={styles.username}>@{user.username}</Text>
-                {!!user.bio && <Text style={styles.bio} numberOfLines={3}>{user.bio}</Text>}
-                <Text style={styles.meta}>Tap the settings icon to manage account</Text>
               </View>
-            </View>
+            </LinearGradient>
 
-            {/* Stats Row (clickable) */}
-            <View style={styles.statsRow}>
-              <Pressable onPress={() => router.push('/follows/following')} style={styles.stat}>
-                <Text style={styles.statValue}>{stats.following}</Text>
-                <Text style={styles.statLabel}>Following</Text>
+            {/* Redesigned Stats Cards */}
+            <View style={styles.statsContainer}>
+              <Pressable 
+                onPress={() => router.push('/follows/following')} 
+                style={({ pressed }) => [styles.statCard, pressed && { opacity: 0.8 }]}
+              >
+                <LinearGradient
+                  colors={['#667eea', '#764ba2']}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 1 }}
+                  style={styles.statGradient}
+                >
+                  <Ionicons name="people" size={24} color="#fff" />
+                  <Text style={styles.statCardValue}>{stats.following}</Text>
+                  <Text style={styles.statCardLabel}>Following</Text>
+                </LinearGradient>
               </Pressable>
-              <Pressable onPress={() => router.push('/follows/followers')} style={styles.stat}>
-                <Text style={styles.statValue}>{stats.followers}</Text>
-                <Text style={styles.statLabel}>Followers</Text>
+
+              <Pressable 
+                onPress={() => router.push('/follows/followers')} 
+                style={({ pressed }) => [styles.statCard, pressed && { opacity: 0.8 }]}
+              >
+                <LinearGradient
+                  colors={['#f093fb', '#f5576c']}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 1 }}
+                  style={styles.statGradient}
+                >
+                  <Ionicons name="heart" size={24} color="#fff" />
+                  <Text style={styles.statCardValue}>{stats.followers}</Text>
+                  <Text style={styles.statCardLabel}>Followers</Text>
+                </LinearGradient>
               </Pressable>
-              <Pressable onPress={() => Alert.alert('Posts', `${stats.posts} posts`)} style={styles.stat}>
-                <Text style={styles.statValue}>{stats.posts}</Text>
-                <Text style={styles.statLabel}>Posts</Text>
+
+              <Pressable 
+                onPress={() => Alert.alert('Posts', `${stats.posts} posts`)} 
+                style={({ pressed }) => [styles.statCard, pressed && { opacity: 0.8 }]}
+              >
+                <LinearGradient
+                  colors={['#4facfe', '#00f2fe']}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 1 }}
+                  style={styles.statGradient}
+                >
+                  <Ionicons name="videocam" size={24} color="#fff" />
+                  <Text style={styles.statCardValue}>{stats.posts}</Text>
+                  <Text style={styles.statCardLabel}>Posts</Text>
+                </LinearGradient>
               </Pressable>
             </View>
 
@@ -388,21 +453,29 @@ Our mission: Stream. Connect. Dance.</Text>
               <Button text="Edit Profile" onPress={handleEdit} />
             </View>
 
-            {/* Instagram-like tabs */}
+            {/* Modern Tabs */}
             <GridTabs />
 
             {/* Grid */}
             <View style={styles.grid}>
               {activeTab === 'reels' ? (
                 myReels.length === 0 ? (
-                  <Text style={styles.empty}>No reels yet. Upload your first reel!</Text>
+                  <View style={styles.emptyState}>
+                    <Ionicons name="videocam-outline" size={48} color={colors.grey} />
+                    <Text style={styles.emptyTitle}>No reels yet</Text>
+                    <Text style={styles.emptyText}>Upload your first dance reel!</Text>
+                  </View>
                 ) : (
                   myReels.map((r) => <ReelGridItem key={r.id} thumb={r.thumb} />)
                 )
-              ) : savedReels.length === 0 ? (
-                <Text style={styles.empty}>No saved reels yet.</Text>
+              ) : taggedReels.length === 0 ? (
+                <View style={styles.emptyState}>
+                  <Ionicons name="pricetag-outline" size={48} color={colors.grey} />
+                  <Text style={styles.emptyTitle}>No tagged reels</Text>
+                  <Text style={styles.emptyText}>When others tag you in their reels, they&apos;ll appear here</Text>
+                </View>
               ) : (
-                savedReels.map((r) => <ReelGridItem key={r.id} thumb={r.thumb} />)
+                taggedReels.map((r) => <ReelGridItem key={r.id} thumb={r.thumb_uri} />)
               )}
             </View>
           </>
@@ -417,9 +490,17 @@ Our mission: Stream. Connect. Dance.</Text>
             <GridTabs />
             <View style={styles.grid}>
               {activeTab === 'reels' ? (
-                <Text style={styles.empty}>Sign in to see your uploaded reels.</Text>
+                <View style={styles.emptyState}>
+                  <Ionicons name="lock-closed-outline" size={48} color={colors.grey} />
+                  <Text style={styles.emptyTitle}>Sign in required</Text>
+                  <Text style={styles.emptyText}>Sign in to see your uploaded reels</Text>
+                </View>
               ) : (
-                <Text style={styles.empty}>Sign in to see saved reels.</Text>
+                <View style={styles.emptyState}>
+                  <Ionicons name="lock-closed-outline" size={48} color={colors.grey} />
+                  <Text style={styles.emptyTitle}>Sign in required</Text>
+                  <Text style={styles.emptyText}>Sign in to see tagged reels</Text>
+                </View>
               )}
             </View>
           </>
@@ -445,20 +526,13 @@ function ReelGridItem({ thumb }: { thumb?: string }) {
         <Image source={{ uri: thumb }} style={gridStyles.media} />
       ) : (
         <View style={gridStyles.placeholder}>
-          <Ionicons name="play-circle" size={28} color={colors.primary} />
-          <Text style={gridStyles.placeholderText}>Reel</Text>
+          <Ionicons name="play-circle" size={32} color={colors.primary} />
         </View>
       )}
+      <View style={gridStyles.overlay}>
+        <Ionicons name="play" size={16} color="#fff" />
+      </View>
     </Pressable>
-  );
-}
-
-function Stat({ label, value }: { label: string; value: number }) {
-  return (
-    <View style={styles.stat}>
-      <Text style={styles.statValue}>{value}</Text>
-      <Text style={styles.statLabel}>{label}</Text>
-    </View>
   );
 }
 
@@ -555,7 +629,7 @@ function LinkRow({ label, value, onPress }: { label: string; value: string; onPr
   );
 }
 
-const AVATAR_SIZE = 74;
+const AVATAR_SIZE = 84;
 
 const styles = StyleSheet.create({
   container: {
@@ -566,114 +640,140 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    marginBottom: 6,
+    marginBottom: 16,
   },
   brand: {
-    fontSize: 22,
+    fontSize: 24,
     fontWeight: '900',
     color: colors.text,
+    letterSpacing: -0.5,
   },
   settingsBtn: {
-    padding: 8,
-    borderRadius: 999,
+    padding: 10,
+    borderRadius: 12,
     backgroundColor: colors.backgroundAlt,
   },
   subtitle: {
     color: colors.grey,
     marginBottom: 14,
+    fontSize: 16,
+  },
+  profileHeader: {
+    borderRadius: 20,
+    padding: 16,
+    marginBottom: 16,
   },
   userRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginVertical: 12,
+  },
+  avatarContainer: {
+    position: 'relative',
   },
   avatar: {
     width: AVATAR_SIZE,
     height: AVATAR_SIZE,
     borderRadius: AVATAR_SIZE / 2,
-    borderWidth: 3,
-    borderColor: colors.primaryLight,
+    borderWidth: 4,
+    borderColor: '#fff',
+  },
+  avatarRing: {
+    position: 'absolute',
+    top: -4,
+    left: -4,
+    right: -4,
+    bottom: -4,
+    borderRadius: (AVATAR_SIZE + 8) / 2,
+    borderWidth: 2,
+    borderColor: colors.primary,
   },
   avatarPlaceholder: {
     width: AVATAR_SIZE,
     height: AVATAR_SIZE,
     borderRadius: AVATAR_SIZE / 2,
     backgroundColor: colors.backgroundAlt,
-    borderWidth: 1,
-    borderColor: colors.divider,
+    borderWidth: 4,
+    borderColor: '#fff',
     alignItems: 'center',
     justifyContent: 'center',
   },
   avatarInitials: {
     color: colors.text,
-    fontSize: 22,
+    fontSize: 28,
     fontWeight: '900',
   },
   username: {
-    fontSize: 18,
+    fontSize: 22,
     fontWeight: '900',
     color: colors.text,
+    marginBottom: 4,
   },
   bio: {
     color: colors.text,
-    marginTop: 4,
-  },
-  meta: {
-    color: colors.grey,
-    marginTop: 4,
+    fontSize: 14,
+    lineHeight: 20,
   },
   actions: {
     gap: 10,
-    marginTop: 6,
+    marginBottom: 16,
   },
-  statsRow: {
+  statsContainer: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
-    backgroundColor: colors.card,
-    borderWidth: 1,
-    borderColor: colors.divider,
-    borderRadius: 12,
-    padding: 12,
-    boxShadow: '0px 6px 14px rgba(0,0,0,0.06)',
-    elevation: 2,
-    marginBottom: 12,
+    gap: 10,
+    marginBottom: 16,
   },
-  stat: {
-    alignItems: 'center',
+  statCard: {
     flex: 1,
+    borderRadius: 16,
+    overflow: 'hidden',
+    boxShadow: '0px 8px 20px rgba(0,0,0,0.1)',
+    elevation: 4,
   },
-  statValue: {
-    fontSize: 18,
+  statGradient: {
+    padding: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+    minHeight: 110,
+  },
+  statCardValue: {
+    fontSize: 24,
     fontWeight: '900',
-    color: colors.text,
+    color: '#fff',
+    marginTop: 8,
   },
-  statLabel: {
-    color: colors.grey,
+  statCardLabel: {
+    color: '#fff',
+    fontSize: 12,
+    fontWeight: '700',
+    marginTop: 4,
+    opacity: 0.9,
   },
   gridTabs: {
     flexDirection: 'row',
     gap: 8,
     backgroundColor: colors.backgroundAlt,
-    borderRadius: 999,
-    padding: 4,
-    marginTop: 6,
-    marginBottom: 10,
+    borderRadius: 16,
+    padding: 6,
+    marginBottom: 16,
   },
   gridTabBtn: {
     flex: 1,
-    paddingVertical: 8,
-    borderRadius: 999,
+    paddingVertical: 12,
+    borderRadius: 12,
     alignItems: 'center',
     flexDirection: 'row',
     justifyContent: 'center',
-    gap: 6,
+    gap: 8,
   },
   gridTabBtnActive: {
     backgroundColor: colors.primary,
+    boxShadow: '0px 4px 12px rgba(0,0,0,0.15)',
+    elevation: 3,
   },
   gridTabTxt: {
     color: colors.text,
     fontWeight: '800',
+    fontSize: 15,
   },
   gridTabTxtActive: {
     color: '#fff',
@@ -681,7 +781,27 @@ const styles = StyleSheet.create({
   grid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: 6,
+    gap: 8,
+  },
+  emptyState: {
+    width: '100%',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 48,
+    paddingHorizontal: 24,
+  },
+  emptyTitle: {
+    fontSize: 18,
+    fontWeight: '800',
+    color: colors.text,
+    marginTop: 16,
+    marginBottom: 8,
+  },
+  emptyText: {
+    fontSize: 14,
+    color: colors.grey,
+    textAlign: 'center',
+    lineHeight: 20,
   },
   sheetHeader: {
     paddingHorizontal: 4,
@@ -818,23 +938,18 @@ const styles = StyleSheet.create({
     color: colors.primary,
     fontWeight: '800',
   },
-  empty: {
-    color: colors.grey,
-    paddingVertical: 16,
-    textAlign: 'center',
-    width: '100%',
-  },
 });
 
 const gridStyles = StyleSheet.create({
   item: {
-    width: '32%',
-    aspectRatio: 1,
-    borderRadius: 10,
+    width: '31.5%',
+    aspectRatio: 9 / 16,
+    borderRadius: 12,
     overflow: 'hidden',
     backgroundColor: colors.backgroundAlt,
     borderWidth: 1,
     borderColor: colors.divider,
+    position: 'relative',
   },
   media: {
     width: '100%',
@@ -844,10 +959,14 @@ const gridStyles = StyleSheet.create({
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 6,
+    backgroundColor: colors.backgroundAlt,
   },
-  placeholderText: {
-    color: colors.grey,
-    fontWeight: '700',
+  overlay: {
+    position: 'absolute',
+    bottom: 8,
+    right: 8,
+    backgroundColor: 'rgba(0,0,0,0.6)',
+    borderRadius: 12,
+    padding: 4,
   },
 });
