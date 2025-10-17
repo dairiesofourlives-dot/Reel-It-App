@@ -1,37 +1,29 @@
 
-import React, { useMemo, useState } from 'react';
-import { View, Text, StyleSheet, Alert, TextInput, Pressable } from 'react-native';
+import React, { useState } from 'react';
+import { View, Text, StyleSheet, Pressable, ScrollView, TextInput, Alert, Dimensions } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
 import { colors, commonStyles } from '../../styles/commonStyles';
-import Button from '../../components/Button';
 import { useReels } from '../../state/reelsContext';
 import { Audio, Video } from 'expo-av';
-import { useLocalSearchParams } from 'expo-router';
+import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
+import { LinearGradient } from 'expo-linear-gradient';
+
+const { width } = Dimensions.get('window');
+const PREVIEW_HEIGHT = width * 1.5; // 9:16 aspect ratio
 
 export default function UploadScreen() {
   const { addReel, user } = useReels();
+  const router = useRouter();
   const params = useLocalSearchParams();
   const preSong = typeof params.song === 'string' ? params.song : undefined;
 
   const [picked, setPicked] = useState<string | null>(null);
-  const [pickedDuration, setPickedDuration] = useState<number | null>(null); // seconds
-  const [overlayText, setOverlayText] = useState('');
+  const [pickedDuration, setPickedDuration] = useState<number | null>(null);
+  const [caption, setCaption] = useState('');
   const [filter, setFilter] = useState<'none' | 'mono' | 'warm' | 'cool'>('none');
-  const [aspect, setAspect] = useState<'9:16' | '1:1' | '16:9'>('9:16');
 
-  const MAX_DURATION = 90; // seconds
-
-  const aspectStyle = useMemo(() => {
-    switch (aspect) {
-      case '1:1':
-        return { aspectRatio: 1 };
-      case '16:9':
-        return { aspectRatio: 16 / 9 };
-      default:
-        return { aspectRatio: 9 / 16 };
-    }
-  }, [aspect]);
+  const MAX_DURATION = 90; // 1 minute 30 seconds
 
   const ensureLoggedIn = () => {
     if (!user) {
@@ -43,7 +35,10 @@ export default function UploadScreen() {
 
   const onPicked = (uri: string, duration?: number | null) => {
     if (duration && duration > MAX_DURATION) {
-      Alert.alert('Video too long', 'Reels must be 1:30 or shorter. Please trim your video.');
+      Alert.alert(
+        'Video too long',
+        `Reels must be 1 minute 30 seconds or shorter. Your video is ${Math.round(duration)}s long. Please trim it and try again.`
+      );
       setPicked(null);
       setPickedDuration(null);
       return;
@@ -58,7 +53,7 @@ export default function UploadScreen() {
       console.log('Requesting media library permissions');
       const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
       if (status !== 'granted') {
-        Alert.alert('Permission required', 'We need access to your media library to upload.');
+        Alert.alert('Permission required', 'We need access to your media library to upload reels.');
         return;
       }
       console.log('Launching picker (videos only)');
@@ -116,7 +111,9 @@ export default function UploadScreen() {
   };
 
   const goLive = () => {
-    Alert.alert('Go Live', 'Live video is coming soon. Stay tuned for dance battles and showcases!');
+    if (!ensureLoggedIn()) return;
+    console.log('Navigating to Go Live screen');
+    router.push('/live');
   };
 
   const postReel = () => {
@@ -126,247 +123,416 @@ export default function UploadScreen() {
     }
     if (!ensureLoggedIn()) return;
 
-    console.log('Posting reel with uri:', picked, { overlayText, filter, aspect, pickedDuration });
+    console.log('Posting reel with uri:', picked, { caption, filter, pickedDuration });
     addReel({
       userId: user?.id || 'guest',
       username: user?.username || 'guest',
       mediaUri: picked,
-      soundName: preSong || 'Imported Sound',
+      soundName: preSong || 'Original Sound',
       category: 'Challenges',
       thumb: picked,
-      overlayText: overlayText.trim() || undefined,
+      overlayText: caption.trim() || undefined,
       filter,
-      aspect,
+      aspect: '9:16',
     });
-    Alert.alert('Uploaded', 'Your reel has been added to the feed.');
+    Alert.alert('Success! 🎉', 'Your reel has been posted to the feed.');
     setPicked(null);
     setPickedDuration(null);
-    setOverlayText('');
+    setCaption('');
     setFilter('none');
-    setAspect('9:16');
+  };
+
+  const clearVideo = () => {
+    setPicked(null);
+    setPickedDuration(null);
+    setCaption('');
+    setFilter('none');
   };
 
   return (
     <View style={[commonStyles.wrapper, styles.container]}>
-      <View style={styles.topRow}>
-        <Text style={styles.title}>Upload</Text>
-        {preSong ? <Text style={styles.usingSong}>Using song: {preSong}</Text> : null}
-      </View>
-      <Text style={styles.subtitle}>Reels must be 1:30 or shorter.</Text>
+      <ScrollView 
+        style={styles.scrollView} 
+        contentContainerStyle={styles.scrollContent}
+        showsVerticalScrollIndicator={false}
+      >
+        {/* Header */}
+        <View style={styles.header}>
+          <Text style={styles.headerTitle}>Create Reel</Text>
+          <Text style={styles.headerSubtitle}>Share your dance moves with the world</Text>
+        </View>
 
-      <View style={[styles.previewWrap, aspectStyle]}>
-        {picked ? (
-          <>
-            <Video source={{ uri: picked }} style={styles.previewMedia} shouldPlay={false} isMuted resizeMode="cover" />
-            {!!overlayText && (
-              <View style={styles.overlayTextWrap}>
-                <Text style={styles.overlayText}>{overlayText}</Text>
+        {/* Video Preview or Upload Options */}
+        {!picked ? (
+          <View style={styles.uploadSection}>
+            <View style={styles.uploadCard}>
+              <Ionicons name="videocam-outline" size={64} color={colors.grey} />
+              <Text style={styles.uploadTitle}>Upload a Dance Reel</Text>
+              <Text style={styles.uploadSubtitle}>Maximum duration: 1 minute 30 seconds</Text>
+              
+              {/* Upload Options */}
+              <View style={styles.optionsContainer}>
+                <Pressable 
+                  onPress={pickFromLibrary}
+                  style={({ pressed }) => [
+                    styles.optionButton,
+                    pressed && styles.optionButtonPressed
+                  ]}
+                >
+                  <LinearGradient
+                    colors={[colors.primary, colors.primaryDark]}
+                    style={styles.optionGradient}
+                    start={{ x: 0, y: 0 }}
+                    end={{ x: 1, y: 1 }}
+                  >
+                    <Ionicons name="images" size={28} color="#fff" />
+                    <Text style={styles.optionText}>Choose from Library</Text>
+                  </LinearGradient>
+                </Pressable>
+
+                <Pressable 
+                  onPress={recordVideo}
+                  style={({ pressed }) => [
+                    styles.optionButton,
+                    pressed && styles.optionButtonPressed
+                  ]}
+                >
+                  <LinearGradient
+                    colors={[colors.accent, '#00A843']}
+                    style={styles.optionGradient}
+                    start={{ x: 0, y: 0 }}
+                    end={{ x: 1, y: 1 }}
+                  >
+                    <Ionicons name="camera" size={28} color="#fff" />
+                    <Text style={styles.optionText}>Record Video</Text>
+                  </LinearGradient>
+                </Pressable>
+
+                <Pressable 
+                  onPress={goLive}
+                  style={({ pressed }) => [
+                    styles.optionButton,
+                    pressed && styles.optionButtonPressed
+                  ]}
+                >
+                  <LinearGradient
+                    colors={['#E91E63', '#C2185B']}
+                    style={styles.optionGradient}
+                    start={{ x: 0, y: 0 }}
+                    end={{ x: 1, y: 1 }}
+                  >
+                    <Ionicons name="radio" size={28} color="#fff" />
+                    <Text style={styles.optionText}>Go Live</Text>
+                    <View style={styles.liveBadge}>
+                      <Text style={styles.liveBadgeText}>LIVE</Text>
+                    </View>
+                  </LinearGradient>
+                </Pressable>
               </View>
-            )}
-            {filter === 'mono' && <View style={[styles.filterOverlay, { backgroundColor: 'rgba(0,0,0,0.35)' }]} />}
-            {filter === 'warm' && <View style={[styles.filterOverlay, { backgroundColor: 'rgba(255,165,0,0.15)' }]} />}
-            {filter === 'cool' && <View style={[styles.filterOverlay, { backgroundColor: 'rgba(0,128,255,0.15)' }]} />}
-          </>
+            </View>
+          </View>
         ) : (
-          <View style={styles.previewPlaceholder}>
-            <Text style={styles.previewText}>No video selected</Text>
+          <View style={styles.editSection}>
+            {/* Video Preview */}
+            <View style={styles.previewContainer}>
+              <Video 
+                source={{ uri: picked }} 
+                style={styles.videoPreview}
+                shouldPlay={false}
+                isMuted
+                resizeMode="cover"
+                isLooping
+              />
+              {filter === 'mono' && <View style={[styles.filterOverlay, { backgroundColor: 'rgba(0,0,0,0.35)' }]} />}
+              {filter === 'warm' && <View style={[styles.filterOverlay, { backgroundColor: 'rgba(255,165,0,0.15)' }]} />}
+              {filter === 'cool' && <View style={[styles.filterOverlay, { backgroundColor: 'rgba(0,128,255,0.15)' }]} />}
+              
+              {/* Duration Badge */}
+              {pickedDuration && (
+                <View style={styles.durationBadge}>
+                  <Ionicons name="time-outline" size={14} color="#fff" />
+                  <Text style={styles.durationText}>{Math.round(pickedDuration)}s</Text>
+                </View>
+              )}
+
+              {/* Clear Button */}
+              <Pressable onPress={clearVideo} style={styles.clearButton}>
+                <Ionicons name="close-circle" size={32} color="#fff" />
+              </Pressable>
+            </View>
+
+            {/* Caption Input */}
+            <View style={styles.captionContainer}>
+              <Text style={styles.sectionLabel}>Caption</Text>
+              <TextInput
+                value={caption}
+                onChangeText={setCaption}
+                placeholder="Add a caption to your reel..."
+                placeholderTextColor={colors.grey}
+                style={styles.captionInput}
+                multiline
+                maxLength={150}
+              />
+              <Text style={styles.charCount}>{caption.length}/150</Text>
+            </View>
+
+            {/* Filter Selection */}
+            <View style={styles.filterContainer}>
+              <Text style={styles.sectionLabel}>Filter</Text>
+              <ScrollView 
+                horizontal 
+                showsHorizontalScrollIndicator={false}
+                contentContainerStyle={styles.filterScroll}
+              >
+                {(['none', 'mono', 'warm', 'cool'] as const).map((f) => (
+                  <Pressable
+                    key={f}
+                    onPress={() => setFilter(f)}
+                    style={[
+                      styles.filterChip,
+                      filter === f && styles.filterChipActive
+                    ]}
+                  >
+                    <Text style={[
+                      styles.filterChipText,
+                      filter === f && styles.filterChipTextActive
+                    ]}>
+                      {f.charAt(0).toUpperCase() + f.slice(1)}
+                    </Text>
+                  </Pressable>
+                ))}
+              </ScrollView>
+            </View>
+
+            {/* Post Button */}
+            <Pressable onPress={postReel} style={styles.postButton}>
+              <LinearGradient
+                colors={[colors.primary, colors.primaryDark]}
+                style={styles.postGradient}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 1 }}
+              >
+                <Ionicons name="checkmark-circle" size={24} color="#fff" />
+                <Text style={styles.postButtonText}>Post Reel</Text>
+              </LinearGradient>
+            </Pressable>
           </View>
         )}
-
-        {/* Floating bubbles like IG */}
-        <View style={styles.fabRow}>
-          <Pressable onPress={pickFromLibrary} style={({ pressed }) => [styles.fab, pressed && { opacity: 0.9 }]}>
-            <Ionicons name="film" size={22} color="#fff" />
-            <Text style={styles.fabLabel}>Upload</Text>
-          </Pressable>
-          <Pressable onPress={goLive} style={({ pressed }) => [styles.fab, { backgroundColor: '#e91e63' }, pressed && { opacity: 0.9 }]}>
-            <Ionicons name="radio" size={22} color="#fff" />
-            <Text style={styles.fabLabel}>Go Live</Text>
-          </Pressable>
-          <Pressable onPress={recordVideo} style={({ pressed }) => [styles.fab, { backgroundColor: colors.primaryDark }, pressed && { opacity: 0.9 }]}>
-            <Ionicons name="camera" size={22} color="#fff" />
-            <Text style={styles.fabLabel}>Record</Text>
-          </Pressable>
-        </View>
-      </View>
-
-      <View style={styles.editCard}>
-        <Text style={styles.label}>Overlay Text</Text>
-        <TextInput
-          value={overlayText}
-          onChangeText={setOverlayText}
-          placeholder="Add a caption overlay..."
-          placeholderTextColor={colors.grey}
-          style={styles.input}
-        />
-        <Text style={styles.label}>Filter</Text>
-        <View style={styles.row}>
-          {(['none', 'mono', 'warm', 'cool'] as const).map((f) => (
-            <Pressable
-              key={f}
-              onPress={() => setFilter(f)}
-              style={[styles.chip, filter === f && styles.chipActive]}
-            >
-              <Text style={[styles.chipText, filter === f && styles.chipTextActive]}>{f}</Text>
-            </Pressable>
-          ))}
-        </View>
-        <Text style={styles.label}>Aspect</Text>
-        <View style={styles.row}>
-          {(['9:16', '1:1', '16:9'] as const).map((a) => (
-            <Pressable
-              key={a}
-              onPress={() => setAspect(a)}
-              style={[styles.chip, aspect === a && styles.chipActive]}
-            >
-              <Text style={[styles.chipText, aspect === a && styles.chipTextActive]}>{a}</Text>
-            </Pressable>
-          ))}
-        </View>
-
-        <Button text="Post Reel" onPress={postReel} style={{ backgroundColor: colors.primary }} />
-      </View>
+      </ScrollView>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
-    paddingHorizontal: 16,
-    paddingTop: 18,
+    flex: 1,
   },
-  topRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
+  scrollView: {
+    flex: 1,
   },
-  title: {
-    fontSize: 22,
+  scrollContent: {
+    paddingBottom: 100,
+  },
+  header: {
+    paddingHorizontal: 20,
+    paddingTop: 20,
+    paddingBottom: 16,
+    backgroundColor: colors.background,
+  },
+  headerTitle: {
+    fontSize: 32,
     fontWeight: '800',
     color: colors.text,
-    marginBottom: 6,
+    marginBottom: 4,
   },
-  usingSong: {
-    color: colors.primary,
-    fontWeight: '800',
-  },
-  subtitle: {
+  headerSubtitle: {
+    fontSize: 15,
     color: colors.grey,
-    marginBottom: 12,
+    fontWeight: '500',
   },
-  previewWrap: {
+  uploadSection: {
+    paddingHorizontal: 20,
+  },
+  uploadCard: {
+    backgroundColor: colors.card,
+    borderRadius: 20,
+    padding: 32,
+    alignItems: 'center',
+    borderWidth: 2,
+    borderColor: colors.divider,
+    borderStyle: 'dashed',
+  },
+  uploadTitle: {
+    fontSize: 20,
+    fontWeight: '700',
+    color: colors.text,
+    marginTop: 16,
+    marginBottom: 4,
+  },
+  uploadSubtitle: {
+    fontSize: 14,
+    color: colors.grey,
+    marginBottom: 24,
+    textAlign: 'center',
+  },
+  optionsContainer: {
     width: '100%',
-    borderRadius: 12,
+    gap: 12,
+  },
+  optionButton: {
+    width: '100%',
+    borderRadius: 16,
+    overflow: 'hidden',
+    boxShadow: '0 4px 12px rgba(0,0,0,0.1)',
+    elevation: 4,
+  },
+  optionButtonPressed: {
+    opacity: 0.9,
+    transform: [{ scale: 0.98 }],
+  },
+  optionGradient: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 18,
+    paddingHorizontal: 24,
+    gap: 12,
+  },
+  optionText: {
+    color: '#fff',
+    fontSize: 17,
+    fontWeight: '700',
+  },
+  liveBadge: {
+    backgroundColor: 'rgba(255,255,255,0.3)',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 6,
+    marginLeft: 8,
+  },
+  liveBadgeText: {
+    color: '#fff',
+    fontSize: 11,
+    fontWeight: '900',
+    letterSpacing: 0.5,
+  },
+  editSection: {
+    paddingHorizontal: 20,
+  },
+  previewContainer: {
+    width: '100%',
+    height: PREVIEW_HEIGHT,
+    borderRadius: 20,
     overflow: 'hidden',
     backgroundColor: colors.backgroundAlt,
-    borderWidth: 1,
-    borderColor: colors.divider,
-    boxShadow: '0 4px 10px rgba(0,0,0,0.06)',
-    elevation: 2,
-    marginBottom: 12,
+    marginBottom: 20,
     position: 'relative',
+    boxShadow: '0 8px 24px rgba(0,0,0,0.12)',
+    elevation: 6,
   },
-  previewMedia: {
+  videoPreview: {
     width: '100%',
     height: '100%',
   },
   filterOverlay: {
     position: 'absolute',
-    top: 0, left: 0, right: 0, bottom: 0,
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
   },
-  previewPlaceholder: {
-    width: '100%',
-    height: 320,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  previewText: {
-    color: colors.grey,
-  },
-  overlayTextWrap: {
+  durationBadge: {
     position: 'absolute',
-    top: 10,
-    left: 10,
-    right: 10,
-    backgroundColor: 'rgba(0,0,0,0.35)',
-    padding: 6,
-    borderRadius: 8,
+    top: 16,
+    right: 16,
+    backgroundColor: 'rgba(0,0,0,0.7)',
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 20,
   },
-  overlayText: {
+  durationText: {
     color: '#fff',
-    fontWeight: '800',
+    fontSize: 13,
+    fontWeight: '700',
   },
-  editCard: {
+  clearButton: {
+    position: 'absolute',
+    top: 16,
+    left: 16,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    borderRadius: 20,
+  },
+  captionContainer: {
+    marginBottom: 20,
+  },
+  sectionLabel: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: colors.text,
+    marginBottom: 10,
+  },
+  captionInput: {
     backgroundColor: colors.card,
     borderWidth: 1,
     borderColor: colors.divider,
     borderRadius: 12,
-    padding: 12,
-    boxShadow: '0px 6px 14px rgba(0, 0, 0, 0.06)',
-    elevation: 2,
-    marginBottom: 10,
-  },
-  label: {
+    padding: 14,
+    fontSize: 15,
     color: colors.text,
-    fontWeight: '800',
+    minHeight: 80,
+    textAlignVertical: 'top',
+  },
+  charCount: {
+    fontSize: 12,
+    color: colors.grey,
+    textAlign: 'right',
     marginTop: 6,
-    marginBottom: 6,
   },
-  input: {
-    width: '100%',
-    borderWidth: 1,
-    borderColor: colors.divider,
-    borderRadius: 10,
-    paddingHorizontal: 14,
-    paddingVertical: 12,
-    backgroundColor: colors.card,
-    color: colors.text,
+  filterContainer: {
+    marginBottom: 24,
   },
-  row: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 8,
-    marginBottom: 6,
+  filterScroll: {
+    gap: 10,
   },
-  chip: {
-    paddingVertical: 6,
-    paddingHorizontal: 10,
-    borderRadius: 999,
+  filterChip: {
     backgroundColor: colors.backgroundAlt,
-    borderWidth: 1,
+    paddingVertical: 10,
+    paddingHorizontal: 20,
+    borderRadius: 20,
+    borderWidth: 2,
     borderColor: colors.divider,
   },
-  chipActive: {
+  filterChipActive: {
     backgroundColor: colors.primary,
     borderColor: colors.primary,
   },
-  chipText: {
+  filterChipText: {
+    fontSize: 15,
+    fontWeight: '600',
     color: colors.text,
-    fontWeight: '700',
   },
-  chipTextActive: {
+  filterChipTextActive: {
     color: '#fff',
   },
-  fabRow: {
-    position: 'absolute',
-    bottom: 10,
-    left: 10,
-    right: 10,
-    flexDirection: 'row',
-    justifyContent: 'space-between',
+  postButton: {
+    borderRadius: 16,
+    overflow: 'hidden',
+    boxShadow: '0 6px 16px rgba(13,110,253,0.3)',
+    elevation: 6,
   },
-  fab: {
-    backgroundColor: colors.primary,
-    paddingVertical: 10,
-    paddingHorizontal: 14,
-    borderRadius: 999,
+  postGradient: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
-    boxShadow: '0 4px 10px rgba(0,0,0,0.15)',
+    justifyContent: 'center',
+    paddingVertical: 18,
+    gap: 10,
   },
-  fabLabel: {
+  postButtonText: {
     color: '#fff',
+    fontSize: 18,
     fontWeight: '800',
   },
 });
